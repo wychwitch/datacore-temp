@@ -24,6 +24,12 @@ export interface ListState<T> {
      * rendered as a literal.
      */
     renderer?: (element: T, index: number) => React.ReactNode | Literal;
+
+    /** whether or not this list produces "nested" (indented) output */
+    nested?: boolean;
+
+    /** the key in which to look for sub-items */
+    nestingKey?: string;
 }
 
 /** A simple and responsive list view. */
@@ -52,6 +58,9 @@ export function ListView<T>(state: ListState<T>) {
                 {elements.map((element, index) => (
                     <div className="datacore-unwrapped-list-item" key={index}>
                         {ensureElement(renderer(element, index))}
+                        {state.nested &&
+                            <ListView<T> {...state} rows={(element as any)[state.nestingKey ?? "$elements"]}/>
+                        }
                     </div>
                 ))}
             </div>
@@ -62,6 +71,9 @@ export function ListView<T>(state: ListState<T>) {
                 {elements.map((element, index) => (
                     <li key={index} className="datacore-list-item">
                         {ensureElement(renderer(element, index))}
+                        {state.nested &&
+                            <ListView<T> {...state} rows={(element as any)[state.nestingKey ?? "$elements"]}/>
+                        }
                     </li>
                 ))}
             </ol>
@@ -72,6 +84,9 @@ export function ListView<T>(state: ListState<T>) {
                 {elements.map((element, index) => (
                     <li key={index} className="datacore-list-item">
                         {ensureElement(renderer(element, index))}
+                        {state.nested &&
+                            <ListView<T> {...state} rows={(element as any)[state.nestingKey ?? "$elements"]}/>
+                        }
                     </li>
                 ))}
             </ul>
