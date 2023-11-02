@@ -59,7 +59,9 @@ export function ListView<T>(state: ListState<T>) {
                     <div className="datacore-unwrapped-list-item" key={index}>
                         {ensureElement(renderer(element, index))}
                         {state.nested &&
-                            <ListView<T> {...state} rows={(element as any)[state.nestingKey ?? "$elements"]}/>
+                            <div style={"margin-left: 0.8em"}>
+                                <ListView<T> {...state} rows={(element as any)[state.nestingKey ?? "$elements"]}/>
+                            </div>
                         }
                     </div>
                 ))}
