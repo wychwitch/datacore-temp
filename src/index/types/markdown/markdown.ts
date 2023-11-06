@@ -181,7 +181,7 @@ export class MarkdownSection implements Indexable, Taggable, Linkable, Linkbeari
 
     /** Convert raw markdown section data to the appropriate class. */
     static from(raw: JsonMarkdownSection, file: string, normalizer: LinkNormalizer = NOOP_NORMALIZER): MarkdownSection {
-        const blocks = raw.$blocks.map((block) => MarkdownBlock.from(block, file, normalizer));
+        const blocks = raw.$blocks.map((block) => MarkdownBlock.from(block, file, MarkdownSection.readableId(file, raw.$title, raw.$ordinal), normalizer));
         return new MarkdownSection({
             $file: file,
             $id: MarkdownSection.readableId(file, raw.$title, raw.$ordinal),
@@ -279,16 +279,16 @@ export class MarkdownBlock implements Indexable, Linkbearing, Taggable, Fieldbea
     /** The type of block - paragraph, list, and so on. */
     $type: string;
 
-    static from(object: JsonMarkdownBlock, file: string, normalizer: LinkNormalizer = NOOP_NORMALIZER): MarkdownBlock {
+    static from(object: JsonMarkdownBlock, section: string, file: string, normalizer: LinkNormalizer = NOOP_NORMALIZER): MarkdownBlock {
         if (object.$type === "list") {
-            return MarkdownListBlock.from(object as JsonMarkdownListBlock, file, normalizer);
+            return MarkdownListBlock.from(object as JsonMarkdownListBlock, file, section, normalizer);
         } else if (object.$type === "datablock") {
-            return MarkdownDatablock.from(object as JsonMarkdownDatablock, file, normalizer);
+            return MarkdownDatablock.from(object as JsonMarkdownDatablock, file, section, normalizer);
         }
 
         return new MarkdownBlock({
             $file: file,
-            $id: MarkdownBlock.readableId(file, object.$ordinal),
+            $id: MarkdownBlock.readableId(file, section, object.$ordinal),
             $ordinal: object.$ordinal,
             $position: object.$position,
             $tags: object.$tags,
@@ -341,8 +341,8 @@ export class MarkdownBlock implements Indexable, Linkbearing, Taggable, Fieldbea
     );
 
     /** Generate a readable ID for this block using the ordinal of the block. */
-    static readableId(file: string, ordinal: number): string {
-        return `${file}/block${ordinal}`;
+    static readableId(file: string, section: string, ordinal: number): string {
+        return `${file}/${section}/block${ordinal}`;
     }
 }
 
@@ -360,13 +360,14 @@ export class MarkdownListBlock extends MarkdownBlock implements Taggable, Linkbe
     static from(
         object: JsonMarkdownListBlock,
         file: string,
+        section: string,
         normalizer: LinkNormalizer = NOOP_NORMALIZER
     ): MarkdownListBlock {
         const elements = object.$elements.map((elem) => MarkdownListItem.from(elem, file, normalizer));
         return new MarkdownListBlock({
             // TODO: This is shared with other blocks, should probably be fixed.
             $file: file,
-            $id: MarkdownBlock.readableId(file, object.$ordinal),
+            $id: MarkdownBlock.readableId(file, section, object.$ordinal),
             $ordinal: object.$ordinal,
             $position: object.$position,
             $tags: object.$tags,
@@ -403,6 +404,7 @@ export class MarkdownDatablock extends MarkdownBlock implements Indexable, Field
     static from(
         object: JsonMarkdownDatablock,
         file: string,
+        section: string,
         normalizer: LinkNormalizer = NOOP_NORMALIZER
     ): MarkdownDatablock {
         // Datablocks are based on what is essentially just frontmatter; we can apply
@@ -413,7 +415,7 @@ export class MarkdownDatablock extends MarkdownBlock implements Indexable, Field
 
         return new MarkdownDatablock({
             $file: file,
-            $id: MarkdownDatablock.readableId(file, object.$position.start),
+            $id: MarkdownDatablock.readableId(file, section, object.$position.start),
             $position: object.$position,
             $infields: {},
             $ordinal: object.$ordinal,
@@ -446,7 +448,7 @@ export class MarkdownDatablock extends MarkdownBlock implements Indexable, Field
         });
     }
 
-    static readableId(file: string, line: number): string {
+    static readableId(file: string, section: string, line: number): string {
         return `${file}/datablock${line}`;
     }
 
