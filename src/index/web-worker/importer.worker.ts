@@ -1,5 +1,6 @@
 import { markdownImport } from "index/import/markdown";
-import { ImportCommand, MarkdownImportResult } from "index/web-worker/message";
+import { pdfImport } from "index/import/pdf";
+import { ImportCommand, MarkdownImportResult, PdfImportResult } from "index/web-worker/message";
 
 /** Web worker entry point for importing. */
 onmessage = async (event) => {
@@ -13,7 +14,12 @@ onmessage = async (event) => {
                 type: "markdown",
                 result: markdown,
             } as MarkdownImportResult);
-        } else {
+        } else if (message.type === "pdf") {
+            postMessage({
+                    type: "pdf",
+                    result: await pdfImport(message),
+                } as PdfImportResult)
+							} else {
             postMessage({ $error: "Unsupported import method." });
         }
     } catch (error) {
