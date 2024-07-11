@@ -15,9 +15,13 @@ export interface Settings {
     defaultPagingEnabled: boolean;
     /** Default paging size for all views (number of entries per page.) */
     defaultPageSize: number;
+    /** If set, views will scroll to the top of the view on page changes. */
+    scrollOnPageChange: boolean;
+
     /**
      * Maximum depth that objects will be rendered to (i.e., how many levels of subproperties
-     * will be rendered by default).
+     * will be rendered by default). This avoids infinite recursion due to self referential objects
+     * and also ensures that rendering objects is acceptably performant.
      */
     maxRecursiveRenderDepth: number;
 
@@ -41,6 +45,8 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze<Settings>({
 
     defaultPagingEnabled: true,
     defaultPageSize: 50,
+    scrollOnPageChange: false,
+
     maxRecursiveRenderDepth: 5,
 
     defaultDateFormat: "MMMM dd, yyyy",

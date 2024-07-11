@@ -1,12 +1,16 @@
 import { deferred, Deferred } from "utils/deferred";
 import { Datastore, Substorer } from "index/datastore";
 import { LocalStorageCache } from "index/persister";
-import { Indexable } from "index/types/indexable";
+import { Indexable, INDEXABLE_EXTENSIONS } from "index/types/indexable";
 import { FileImporter, ImportThrottle } from "index/web-worker/importer";
 import { ImportResult } from "index/web-worker/message";
 import { App, Component, EventRef, Events, MetadataCache, TAbstractFile, TFile, Vault } from "obsidian";
 import { Settings } from "settings";
-import { MarkdownListBlock, MarkdownListItem, MarkdownPage } from "./types/markdown/markdown";
+import { MarkdownListBlock, MarkdownListItem, MarkdownPage } from "./types/markdown";
+import { GenericFile } from "./types/files";
+import { DateTime } from "luxon";
+import { EmbedQueue } from "./embed-queue";
+import { JsonMarkdownPage } from "./types/json/markdown";
 
 /** Central API object; handles initialization, events, debouncing, and access to datacore functionality. */
 export class Datacore extends Component {
@@ -21,6 +25,8 @@ export class Datacore extends Component {
     datastore: Datastore;
     /** Asynchronous multi-threaded file importer with throttling. */
     importer: FileImporter;
+    /** Queue of asynchronous read requests; ensures we limit the maximum number of concurrent file loads. */
+    reads: EmbedQueue;
     /** Local-storage backed cache of metadata objects. */
     persister: LocalStorageCache;
     /** Only set when datacore is in the midst of initialization; tracks current progress. */
@@ -47,6 +53,9 @@ export class Datacore extends Component {
                 } as ImportThrottle;
             }))
         );
+
+        // TODO (blacksmithgu): Add a new setting for embed queue concurrency.
+        this.addChild((this.reads = new EmbedQueue(app.vault, () => 8)));
     }
 
     /** Obtain the current index revision, for determining if anything has changed. */
@@ -56,11 +65,35 @@ export class Datacore extends Component {
 
     /** Initialize datacore by scanning persisted caches and all available files, and queueing parses as needed. */
     initialize() {
-        // The metadata cache is updated on initial file index and file loads.
+        // Metadata cache handles markdown file updates.
         this.registerEvent(this.metadataCache.on("resolve", (file) => this.reload(file)));
 
         // Renames do not set off the metadata cache; catch these explicitly.
         this.registerEvent(this.vault.on("rename", this.rename, this));
+
+        // Handle generic file creates and updates; resolve generally only applies to markdown files
+        // but we do keep basic metadata about all files.
+        this.registerEvent(
+            this.vault.on("create", (file) => {
+                if (!(file instanceof TFile)) return;
+
+                // Handled by the metadata cache.
+                if (INDEXABLE_EXTENSIONS.has(file.extension.toLowerCase())) return;
+
+                this.reload(file);
+            })
+        );
+
+        this.registerEvent(
+            this.vault.on("modify", (file) => {
+                if (!(file instanceof TFile)) return;
+
+                // Handled by the metadata cache.
+                if (INDEXABLE_EXTENSIONS.has(file.extension.toLowerCase())) return;
+
+                this.reload(file);
+            })
+        );
 
         // File creation does cause a metadata change, but deletes do not. Clear the caches for this.
         this.registerEvent(
@@ -71,6 +104,11 @@ export class Datacore extends Component {
             })
         );
 
+        this.index();
+    }
+
+    /** Starts the background initializer. */
+    index() {
         // Asynchronously initialize actual content in the background using a lifecycle-respecting object.
         const init = (this.initializer = new DatacoreInitializer(this));
         init.finished().then((stats) => {
@@ -81,11 +119,20 @@ export class Datacore extends Component {
             const durationSecs = (stats.durationMs / 1000.0).toFixed(3);
             console.log(
                 `Datacore: Imported all files in the vault in ${durationSecs}s ` +
-                    `(${stats.imported} imported, ${stats.skipped} skipped).`
+                    `(${stats.imported} imported, ${stats.cached} cached, ${stats.skipped} skipped).`
             );
 
             this.datastore.touch();
             this.trigger("update", this.revision);
+            this.trigger("initialized");
+
+            // Clean up any documents which no longer exist in the vault.
+            // TODO: I think this may race with other concurrent operations, so
+            // this may need to happen at the start of init and not at the end.
+            const currentFiles = this.vault.getFiles().map((file) => file.path);
+            this.persister
+                .synchronize(currentFiles)
+                .then((cleared) => console.log(`Datacore: dropped ${cleared.size} out-of-date file metadata blocks.`));
         });
 
         this.addChild(init);
@@ -101,35 +148,53 @@ export class Datacore extends Component {
         // (for sections, tasks, etc to refer to their parent file) and it requires some finesse to fix.
         this.datastore.delete(oldPath);
         this.reload(file);
+
+        // TODO: For correctness, probably have to either fix links in all linked files OR
+        // just stop normalizing links in the store.
+    }
+
+    /**
+     * Read a file from the Obsidian cache efficiently, limiting the number of concurrent request and debouncing
+     * multiple requests for the same file.
+     */
+    public async read(file: TFile): Promise<string> {
+        return this.reads.read(file);
     }
 
     /** Queue a file for reloading; this is done asynchronously in the background and may take a few seconds. */
     public async reload(file: TFile): Promise<Indexable> {
+        // Filter files by file extensions.
+        if (!INDEXABLE_EXTENSIONS.has(file.extension)) {
+            const result = new GenericFile(
+                file.path,
+                DateTime.fromMillis(file.stat.ctime),
+                DateTime.fromMillis(file.stat.mtime),
+                file.stat.size
+            );
+
+            this.datastore.store(result);
+            return result;
+        }
+
         const result = await this.importer.import<ImportResult>(file);
 
         if (result.type === "error") {
             throw new Error(`Failed to import file '${file.name}: ${result.$error}`);
         } else if (result.type === "markdown") {
+            // Parse the file and normalize metadata from it.
             const parsed = MarkdownPage.from(result.result, (link) => {
                 const rpath = this.metadataCache.getFirstLinkpathDest(link.path, result.result.$path!);
                 if (rpath) return link.withPath(rpath.path);
                 else return link;
             });
 
-            this.datastore.store(parsed, (object, store) => {
-                store(object.$sections, (section, store) => {
-                    store(section.$blocks, (block, store) => {
-                        if (block instanceof MarkdownListBlock) {
-                            // Recursive store function for storing list heirarchies.
-                            const storeRec: Substorer<MarkdownListItem> = (item, store) =>
-                                store(item.$elements, storeRec);
+            // Store it recursively into the datastore for querying.
+            this.storeMarkdown(parsed);
 
-                            store(block.$elements, storeRec);
-                        }
-                    });
-                });
-            });
+            // Write it to the file cache for faster loads in the future.
+            this.persister.storeFile(parsed.$path, parsed.json());
 
+            // And finally trigger an update.
             this.trigger("update", this.revision);
             return parsed;
         }
@@ -137,10 +202,27 @@ export class Datacore extends Component {
         throw new Error("Encountered unrecognized import result type: " + (result as any).type);
     }
 
+    /** Store a markdown document. */
+    public storeMarkdown(data: MarkdownPage) {
+        this.datastore.store(data, (object, store) => {
+            store(object.$sections, (section, store) => {
+                store(section.$blocks, (block, store) => {
+                    if (block instanceof MarkdownListBlock) {
+                        // Recursive store function for storing list heirarchies.
+                        const storeRec: Substorer<MarkdownListItem> = (item, store) => store(item.$elements, storeRec);
+
+                        store(block.$elements, storeRec);
+                    }
+                });
+            });
+        });
+    }
+
     // Event propogation.
 
     /** Called whenever the index updates to a new revision. This is the broadest possible datacore event. */
     public on(evt: "update", callback: (revision: number) => any, context?: any): EventRef;
+    public on(evt: "initialized", callback: () => any, context?: any): EventRef;
 
     on(evt: string, callback: (...data: any) => any, context?: any): EventRef {
         return this.events.on(evt, callback, context);
@@ -158,10 +240,12 @@ export class Datacore extends Component {
 
     /** Trigger an update event. */
     private trigger(evt: "update", revision: number): void;
+    /** Trigger an initialization event. */
+    private trigger(evt: "initialized"): void;
 
     /** Trigger an event. */
     private trigger(evt: string, ...args: any[]): void {
-        this.events.trigger(evt, args);
+        this.events.trigger(evt, ...args);
     }
 }
 
@@ -180,6 +264,8 @@ export class DatacoreInitializer extends Component {
     /** Deferred promise which resolves when importing is done. */
     done: Deferred<InitializationStats>;
 
+    /** The total number of target files to import. */
+    targetTotal: number;
     /** The time that init started in milliseconds. */
     start: number;
     /** Total number of files to import. */
@@ -190,18 +276,21 @@ export class DatacoreInitializer extends Component {
     imported: number;
     /** Total number of skipped files. */
     skipped: number;
+    /** Total number of cached files. */
+    cached: number;
 
     constructor(public core: Datacore) {
         super();
 
         this.active = false;
-        this.queue = this.core.vault.getMarkdownFiles();
+        this.queue = this.core.vault.getFiles();
+        this.targetTotal = this.queue.length;
         this.files = this.queue.length;
         this.start = Date.now();
         this.current = [];
         this.done = deferred();
 
-        this.initialized = this.imported = this.skipped = 0;
+        this.initialized = this.imported = this.skipped = this.cached = 0;
     }
 
     async onload() {
@@ -249,6 +338,7 @@ export class DatacoreInitializer extends Component {
                 files: this.files,
                 imported: this.imported,
                 skipped: this.skipped,
+                cached: this.cached,
             });
         }
     }
@@ -260,6 +350,7 @@ export class DatacoreInitializer extends Component {
 
         if (result.status === "skipped") this.skipped++;
         else if (result.status === "imported") this.imported++;
+        else if (result.status === "cached") this.cached++;
 
         // Queue more jobs for processing.
         this.runNext();
@@ -268,9 +359,17 @@ export class DatacoreInitializer extends Component {
     /** Initialize a specific file. */
     private async init(file: TFile): Promise<InitializationResult> {
         try {
-            const metadata = this.core.metadataCache.getFileCache(file);
-            if (!metadata) return { status: "skipped" };
+            // Handle loading markdown files from cache.
+            const cached = await this.core.persister.loadFile(file.path);
+            if (cached && cached.time >= file.stat.mtime && cached.version == this.core.version) {
+                if (file.extension === "md") {
+                    const data = MarkdownPage.from(cached.data as JsonMarkdownPage, (link) => link);
+                    this.core.storeMarkdown(data);
+                    return { status: "cached" };
+                }
+            }
 
+            // Does not match an existing import type, just reload normally.
             await this.core.reload(file);
             return { status: "imported" };
         } catch (ex) {
@@ -290,9 +389,11 @@ export interface InitializationStats {
     imported: number;
     /** The number of files that were skipped due to no longer existing or not being ready. */
     skipped: number;
+    /** The number of files loaded from the IndexedDB cache. */
+    cached: number;
 }
 
 /** The result of initializing a file. */
 interface InitializationResult {
-    status: "skipped" | "imported";
+    status: "skipped" | "imported" | "cached";
 }

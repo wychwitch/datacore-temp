@@ -22,6 +22,9 @@ export interface DataArray<T> {
     /** The total number of elements in the array. */
     length: number;
 
+    /** Applies the given function to the entire data array. Allows using function chaining while applying an arbitrary intermediate function. */
+    chain<U>(op: (arr: DataArray<T>) => DataArray<U>): DataArray<U>;
+
     /** Filter the data array down to just elements which match the given predicate. */
     where(predicate: ArrayFunc<T, boolean>): DataArray<T>;
     /** Alias for 'where' for people who want array semantics. */
@@ -75,7 +78,7 @@ export interface DataArray<T> {
      * Return an array where elements are grouped by the given key; the resulting array will have objects of the form
      * { key: <key value>, rows: DataArray }.
      */
-    groupBy<U>(key: ArrayFunc<T, U>, comparator?: ArrayComparator<U>): DataArray<{ key: U; rows: DataArray<T> }>;
+    groupBy<U>(key: ArrayFunc<T, U>, comparator?: ArrayComparator<U>): DataArray<{ key: U; rows: T[] }>;
 
     /**
      * If the array is not grouped, groups it as `groupBy` does; otherwise, groups the elements inside each current
@@ -129,6 +132,7 @@ export interface DataArray<T> {
 /** Implementation of DataArray, minus the dynamic variable access, which is implemented via proxy. */
 class DataArrayImpl<T> implements DataArray<T> {
     private static ARRAY_FUNCTIONS: Set<string> = new Set([
+        "chain",
         "where",
         "filter",
         "map",
@@ -190,6 +194,10 @@ class DataArrayImpl<T> implements DataArray<T> {
 
     private lwrap<U>(values: U[]): DataArray<U> {
         return DataArrayImpl.wrap(values, this.defaultComparator);
+    }
+
+    public chain<U>(op: (arr: DataArray<T>) => DataArray<U>): DataArray<U> {
+        return op(this);
     }
 
     public where(predicate: ArrayFunc<T, boolean>): DataArray<T> {
@@ -303,10 +311,7 @@ class DataArrayImpl<T> implements DataArray<T> {
         return this;
     }
 
-    public groupBy<U>(
-        key: ArrayFunc<T, U>,
-        comparator?: ArrayComparator<U>
-    ): DataArray<{ key: U; rows: DataArray<T> }> {
+    public groupBy<U>(key: ArrayFunc<T, U>, comparator?: ArrayComparator<U>): DataArray<{ key: U; rows: T[] }> {
         if (this.values.length == 0) return this.lwrap([]);
 
         // JavaScript sucks and we can't make hash maps over arbitrary types (only strings/ints), so
@@ -314,20 +319,20 @@ class DataArrayImpl<T> implements DataArray<T> {
         let intermediate = this.sort(key, "asc", comparator);
         comparator = comparator ?? this.defaultComparator;
 
-        let result: { key: U; rows: DataArray<T> }[] = [];
+        let result: { key: U; rows: T[] }[] = [];
         let currentRow = [intermediate[0]];
         let current = key(intermediate[0], 0, intermediate.values);
         for (let index = 1; index < intermediate.length; index++) {
             let newKey = key(intermediate[index], index, intermediate.values);
             if (comparator(current, newKey) != 0) {
-                result.push({ key: current, rows: this.lwrap(currentRow) });
+                result.push({ key: current, rows: currentRow });
                 current = newKey;
                 currentRow = [intermediate[index]];
             } else {
                 currentRow.push(intermediate[index]);
             }
         }
-        result.push({ key: current, rows: this.lwrap(currentRow) });
+        result.push({ key: current, rows: currentRow });
 
         return this.lwrap(result);
     }

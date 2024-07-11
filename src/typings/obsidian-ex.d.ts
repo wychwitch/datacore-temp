@@ -1,4 +1,4 @@
-import type { DatacoreApi } from "api/plugin-api";
+import type { DatacoreApi } from "api/api";
 import "obsidian";
 
 declare module "obsidian" {
@@ -11,6 +11,25 @@ declare module "obsidian" {
                     api: DatacoreApi;
                 };
             };
+        };
+        embedRegistry: {
+            embedByExtension: {
+                [key: string]: unknown;
+                md: MarkdownRenderer;
+            };
+            getEmbedCreator: (arg: TFile) => new (
+                arg2: {
+                    app: App;
+                    linktext: string;
+                    sourcePath: string;
+                    showInline: boolean;
+                    depth: number;
+                    containerEl: HTMLElement;
+                    displayMode: boolean;
+                },
+                file: TFile,
+                subpath?: string
+            ) => FileView & { loadFile: (file: TFile) => void };
         };
     }
 }
