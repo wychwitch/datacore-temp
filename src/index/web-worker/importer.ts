@@ -1,9 +1,11 @@
 /** Controls and creates Dataview file importers, allowing for asynchronous loading and parsing of files. */
 
-import { Transferable } from "index/web-worker/transferable";
 import ImportWorker from "index/web-worker/importer.worker";
 import { Component, MetadataCache, TFile, Vault } from "obsidian";
-import { ImportCommand } from "index/web-worker/message";
+import { MarkdownImport } from "index/web-worker/message";
+import { Deferred, deferred } from "utils/deferred";
+
+import { Queue } from "@datastructures-js/queue";
 
 /** Settings for throttling import. */
 export interface ImportThrottle {
@@ -25,11 +27,11 @@ export class FileImporter extends Component {
     workers: Map<number, PoolWorker>;
     /** The next worker ID to hand out. */
     nextWorkerId: number;
-    /** Is the importer active? */
+    /** If true, the importer is now inactive and will not process further files. */
     shutdown: boolean;
 
     /** List of files which have been queued for a reload. */
-    queue: [TFile, (success: any) => void, (failure: any) => void][];
+    queue: Queue<[TFile, Deferred<any>]>;
     /** Outstanding loads indexed by path. */
     outstanding: Map<string, Promise<any>>;
     /** Throttle settings. */
@@ -42,7 +44,7 @@ export class FileImporter extends Component {
         this.nextWorkerId = 0;
         this.throttle = throttle ?? (() => DEFAULT_THROTTLE);
 
-        this.queue = [];
+        this.queue = new Queue();
         this.outstanding = new Map();
     }
 
@@ -55,11 +57,10 @@ export class FileImporter extends Component {
         let existing = this.outstanding.get(file.path);
         if (existing) return existing;
 
-        let promise: Promise<T> = new Promise((resolve, reject) => {
-            this.queue.push([file, resolve, reject]);
-        });
+        let promise = deferred<T>();
 
         this.outstanding.set(file.path, promise);
+        this.queue.enqueue([file, promise]);
         this.schedule();
         return promise;
     }
@@ -72,35 +73,47 @@ export class FileImporter extends Component {
     }
 
     /** Poll from the queue and execute if there is an available worker. */
-    private schedule() {
-        if (this.queue.length == 0 || this.shutdown) return;
+    private async schedule() {
+        if (this.queue.size() == 0 || this.shutdown) return;
 
         const worker = this.availableWorker();
         if (!worker) return;
 
-        const [file, resolve, reject] = this.queue.shift()!;
+        const [file, promise] = this.queue.dequeue()!;
+        worker.active = [file, promise, Date.now()];
 
-        worker.active = [file, resolve, reject, Date.now()];
-        this.vault.cachedRead(file).then((c) =>
-            worker!.worker.postMessage(
-                Transferable.transferable({
-                    type: "markdown",
-                    path: file.path,
-                    contents: c,
-                    stat: file.stat,
-                    metadata: this.metadataCache.getFileCache(file),
-                } as ImportCommand)
-            )
-        );
+        try {
+            switch (file.extension) {
+                default:
+                    const contents = await this.vault.cachedRead(file);
+                    worker!.worker.postMessage({
+                        type: "markdown",
+                        path: file.path,
+                        contents: contents,
+                        stat: file.stat,
+                        metadata: this.metadataCache.getFileCache(file),
+                    } as MarkdownImport);
+            }
+        } catch (ex) {
+            console.log("Datacore: Background file reloading failed. " + ex);
+
+            // Message failed, release this worker.
+            worker.active = undefined;
+        }
     }
 
     /** Finish the parsing of a file, potentially queueing a new file. */
     private finish(worker: PoolWorker, data: any) {
-        let [file, resolve, reject] = worker.active!;
+        if (!worker.active) {
+            console.log("Datacore: Received a stale worker message. Ignoring.", data);
+            return;
+        }
+
+        const [file, promise, start] = worker.active!;
 
         // Resolve promises to let users know this file has finished.
-        if ("$error" in data) reject(data["$error"]);
-        else resolve(data);
+        if ("$error" in data) promise.reject(data["$error"]);
+        else promise.resolve(data);
 
         // Remove file from outstanding.
         this.outstanding.delete(file.path);
@@ -112,7 +125,6 @@ export class FileImporter extends Component {
             terminate(worker);
         } else {
             const now = Date.now();
-            const start = worker.active![3];
             const throttle = Math.max(0.1, this.throttle().utilization) - 1.0;
             const delay = (now - start) * throttle;
 
@@ -159,7 +171,7 @@ export class FileImporter extends Component {
             worker: new ImportWorker(),
         };
 
-        worker.worker.onmessage = (evt) => this.finish(worker, Transferable.value(evt.data));
+        worker.worker.onmessage = (evt) => this.finish(worker, evt.data);
         return worker;
     }
 
@@ -169,8 +181,9 @@ export class FileImporter extends Component {
             terminate(worker);
         }
 
-        for (let [_file, _success, reject] of this.queue) {
-            reject("Terminated");
+        while (!this.queue.isEmpty()) {
+            const [_file, promise] = this.queue.pop()!;
+            promise.reject("Terminated");
         }
 
         this.shutdown = true;
@@ -186,13 +199,13 @@ interface PoolWorker {
     /** UNIX time indicating the next time this worker is available for execution according to target utilization. */
     availableAt: number;
     /** The active promise this worker is working on, if any. */
-    active?: [TFile, (success: any) => void, (failure: any) => void, number];
+    active?: [TFile, Deferred<any>, number];
 }
 
 /** Terminate a pool worker. */
 function terminate(worker: PoolWorker) {
     worker.worker.terminate();
 
-    if (worker.active) worker.active[2]("Terminated");
+    if (worker.active) worker.active[1].reject("Terminated");
     worker.active = undefined;
 }

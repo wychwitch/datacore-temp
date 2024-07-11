@@ -3,12 +3,12 @@ import { Filter, Filters } from "expression/filters";
 import { FolderIndex } from "index/storage/folder";
 import { InvertedIndex } from "index/storage/inverted";
 import { IndexPrimitive, IndexQuery, IndexSource } from "index/types/index-query";
-import { INDEX_FIELDS, Indexable, LINKABLE_TYPE, LINKBEARING_TYPE, TAGGABLE_TYPE } from "index/types/indexable";
+import { Indexable, LINKABLE_TYPE, LINKBEARING_TYPE, TAGGABLE_TYPE } from "index/types/indexable";
 import { MetadataCache, Vault } from "obsidian";
-import { MarkdownPage } from "./types/markdown/markdown";
+import { MarkdownPage } from "./types/markdown";
 import { extractSubtags, normalizeHeaderForLink } from "utils/normalizers";
 import FlatQueue from "flatqueue";
-import { FieldIndex } from "index/storage/fields";
+import { BTreeFieldIndex, EverythingFieldIndex, FieldIndex, IdFieldIndex, SetFieldIndex } from "index/storage/fields";
 import { FIELDBEARING_TYPE, Field, Fieldbearing } from "expression/field";
 import { IndexResolver, execute, optimizeQuery } from "index/storage/query-executor";
 import { Result } from "api/result";
@@ -56,7 +56,7 @@ export class Datastore {
         this.etags = new InvertedIndex();
         this.tags = new InvertedIndex();
         this.links = new InvertedIndex();
-        this.fields = new Map();
+        this.fields = this._initializeFields();
         this.folder = new FolderIndex(vault);
     }
 
@@ -82,6 +82,29 @@ export class Datastore {
         }
 
         return this.objects.get(id);
+    }
+
+    /** Sets up sane field defaults for several indexable fields. */
+    private _initializeFields(): Map<string, FieldIndex> {
+        const fields = new Map<string, FieldIndex>();
+
+        // Specialize indices for $id and the other omnipresent field values.
+        fields.set(
+            "$id",
+            new IdFieldIndex(
+                () => this.ids,
+                (id) => this.objects.has(id)
+            )
+        );
+        fields.set("$types", new EverythingFieldIndex(() => this.ids));
+        fields.set("$typename", new EverythingFieldIndex(() => this.ids));
+        fields.set("$revision", new EverythingFieldIndex(() => this.ids));
+
+        // Optimize over $completed and $status lookups for tasks.
+        fields.set("$completed", new BTreeFieldIndex());
+        fields.set("$status", new BTreeFieldIndex());
+
+        return fields;
     }
 
     /**
@@ -190,11 +213,8 @@ export class Datastore {
         // All fields on an object.
         if (object.$types.contains(FIELDBEARING_TYPE) && "fields" in object) {
             for (const field of object.fields as Iterable<Field>) {
-                // Skip any index fields.
-                if (INDEX_FIELDS.has(field.key)) continue;
-
                 const norm = field.key.toLowerCase();
-                if (!this.fields.has(norm)) this.fields.set(norm, new FieldIndex(false));
+                if (!this.fields.has(norm)) this.fields.set(norm, new SetFieldIndex());
 
                 this.fields.get(norm)!.add(object.$id, field.value);
             }
@@ -212,7 +232,7 @@ export class Datastore {
             this.tags.delete(object.$id, extractSubtags(tags));
         }
 
-        if (object.$types.contains(LINKABLE_TYPE) && iterableExists(object, "$links")) {
+        if (object.$types.contains(LINKBEARING_TYPE) && iterableExists(object, "$links")) {
             // Assume links are normalized when deleting them. Could be broken but I hope not. We can always use a 2-way index to
             // fix this if we encounter non-normalized links.
             this.links.delete(
@@ -223,9 +243,6 @@ export class Datastore {
 
         if (object.$types.contains(FIELDBEARING_TYPE) && "fields" in object) {
             for (const field of object.fields as Iterable<Field>) {
-                // Skip any index fields.
-                if (INDEX_FIELDS.has(field.key)) continue;
-
                 const norm = field.key.toLowerCase();
                 if (!this.fields.has(norm)) continue;
 
@@ -250,7 +267,9 @@ export class Datastore {
     }
 
     /** Find the corresponding object for a given link. */
-    public resolveLink(link: Link, sourcePath?: string): Indexable | undefined {
+    public resolveLink(rawLink: string | Link, sourcePath?: string): Indexable | undefined {
+        let link = typeof rawLink === "string" ? Link.parseInner(rawLink) : rawLink;
+
         if (sourcePath) {
             const linkdest = this.metadataCache.getFirstLinkpathDest(link.path, sourcePath);
             if (linkdest) link = link.withPath(linkdest.path);
@@ -555,8 +574,8 @@ export class Datastore {
         const object = this.objects.get(id);
         if (!object) return;
 
-        if ((direction === "both" || direction === "incoming") && "link" in object && object["link"]) {
-            const incoming = this.links.get((object.link as Link).obsidianLink());
+        if ((direction === "both" || direction === "incoming") && "$link" in object && object["$link"]) {
+            const incoming = this.links.get((object.$link as Link).obsidianLink());
             if (incoming) {
                 for (const id of incoming) {
                     yield id;
@@ -566,10 +585,10 @@ export class Datastore {
 
         if (
             (direction === "both" || direction === "outgoing") &&
-            LINKBEARING_TYPE in object &&
-            iterableExists(object, "links")
+            object.$types.contains(LINKABLE_TYPE) &&
+            iterableExists(object, "$links")
         ) {
-            for (const link of object.links as Link[]) {
+            for (const link of object.$links as Link[]) {
                 const resolved = this.resolveLink(link);
                 if (resolved) yield resolved.$id;
             }

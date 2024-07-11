@@ -1,9 +1,6 @@
 import { Link } from "expression/link";
 import { DateTime } from "luxon";
 
-/** The names of all index fields that are present on ALL indexed types. */
-export const INDEX_FIELDS = new Set(["$types", "$typename", "$id", "$revision"]);
-
 /** Any indexable field, which must have a few index-relevant properties. */
 export interface Indexable {
     /** The object types that this indexable is. */
@@ -57,3 +54,9 @@ export interface Linkbearing {
     /** The links in this file. */
     $links: Link[];
 }
+
+/**
+ * All supported extensions. This should probably become a dynamic lookup table and not just
+ * a fixed list at some point, especially if we add the ability to turn indexing on/off.
+ */
+export const INDEXABLE_EXTENSIONS = new Set(["md", "markdown"]);

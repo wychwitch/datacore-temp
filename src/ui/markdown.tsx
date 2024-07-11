@@ -1,5 +1,5 @@
 /** Provides core preact / rendering utilities for all view types. */
-import { App, MarkdownRenderChild, MarkdownRenderer } from "obsidian";
+import { App, MarkdownRenderer } from "obsidian";
 import { Component } from "obsidian";
 import { Link, Literal, Literals } from "expression/literal";
 import { Datacore } from "index/datacore";
@@ -7,15 +7,18 @@ import { Settings } from "settings";
 import { currentLocale, renderMinimalDate, renderMinimalDuration } from "utils/normalizers";
 import { extractImageDimensions, isImageEmbed } from "utils/media";
 
-import { h, createContext, Fragment, VNode, render } from "preact";
+import { createContext, Fragment, render } from "preact";
 import { useContext, useMemo, useCallback, useRef, useEffect, useErrorBoundary } from "preact/hooks";
-import { CSSProperties, PropsWithChildren, memo, unmountComponentAtNode } from "preact/compat";
+import { CSSProperties, PropsWithChildren, memo } from "preact/compat";
+import { Embed } from "api/ui/embed";
+
+import "./errors.css";
 
 export const COMPONENT_CONTEXT = createContext<Component>(undefined!);
 export const APP_CONTEXT = createContext<App>(undefined!);
 export const DATACORE_CONTEXT = createContext<Datacore>(undefined!);
 export const SETTINGS_CONTEXT = createContext<Settings>(undefined!);
-export const CURRENT_FILE_CONTEXT = createContext<string>(undefined!);
+export const CURRENT_FILE_CONTEXT = createContext<string>("");
 
 /** More compact provider for all of the datacore react contexts. */
 export function DatacoreContextProvider({
@@ -34,9 +37,7 @@ export function DatacoreContextProvider({
         <COMPONENT_CONTEXT.Provider value={component}>
             <APP_CONTEXT.Provider value={app}>
                 <DATACORE_CONTEXT.Provider value={datacore}>
-                    <CURRENT_FILE_CONTEXT.Provider value={""}>
-                        <SETTINGS_CONTEXT.Provider value={settings}>{children}</SETTINGS_CONTEXT.Provider>
-                    </CURRENT_FILE_CONTEXT.Provider>
+                    <SETTINGS_CONTEXT.Provider value={settings}>{children}</SETTINGS_CONTEXT.Provider>
                 </DATACORE_CONTEXT.Provider>
             </APP_CONTEXT.Provider>
         </COMPONENT_CONTEXT.Provider>
@@ -44,15 +45,16 @@ export function DatacoreContextProvider({
 }
 
 /** Copies how an Obsidian link is rendered but is about an order of magnitude faster to render than via markdown rendering. */
-export function RawLink({ link, sourcePath }: { link: Link | string; sourcePath: string }) {
-    const workspace = useContext(APP_CONTEXT).workspace;
+export function RawLink({ link, sourcePath: maybeSourcePath }: { link: Link | string; sourcePath?: string }) {
+    const workspace = useContext(APP_CONTEXT)?.workspace;
+    const currentPath = useContext(CURRENT_FILE_CONTEXT);
+    const sourcePath = maybeSourcePath ?? currentPath ?? "";
     const parsed = useMemo(() => (Literals.isLink(link) ? link : Link.infer(link)), [link]);
 
     const onClick = useCallback(
         (event: MouseEvent) => {
             const newtab = event.shiftKey;
-            console.log(parsed.obsidianLink(), sourcePath);
-            workspace.openLinkText(parsed.obsidianLink(), sourcePath, newtab);
+            workspace?.openLinkText(parsed.obsidianLink(), sourcePath, newtab);
         },
         [parsed, sourcePath]
     );
@@ -77,14 +79,14 @@ export const ObsidianLink = memo(RawLink);
 /** Hacky preact component which wraps Obsidian's markdown renderer into a neat component. */
 export function RawMarkdown({
     content,
-    sourcePath,
+    sourcePath: maybeSourcePath,
     inline = true,
     style,
     cls,
     onClick,
 }: {
     content: string;
-    sourcePath: string;
+    sourcePath?: string;
     inline?: boolean;
     style?: CSSProperties;
     cls?: string;
@@ -92,12 +94,16 @@ export function RawMarkdown({
 }) {
     const container = useRef<HTMLElement | null>(null);
     const component = useContext(COMPONENT_CONTEXT);
+    const defaultPath = useContext(CURRENT_FILE_CONTEXT);
+    const app = useContext(APP_CONTEXT);
+
+    const sourcePath = maybeSourcePath ?? defaultPath;
 
     useEffect(() => {
         if (!container.current) return;
 
         container.current.innerHTML = "";
-        MarkdownRenderer.renderMarkdown(content, container.current, sourcePath, component).then(() => {
+        MarkdownRenderer.render(app, content, container.current, sourcePath, component).then(() => {
             if (!container.current || !inline) return;
 
             // Unwrap any created paragraph elements if we are inline.
@@ -107,8 +113,26 @@ export function RawMarkdown({
                 paragraph.replaceWith(...Array.from(children));
                 paragraph = container.current.querySelector("p");
             }
+
+            // have embeds actually load instead of displaying as plain text.
+            let embed = container.current.querySelector("span.internal-embed:not(.is-loaded)");
+            while (embed) {
+                embed.empty();
+                render(
+                    <APP_CONTEXT.Provider value={app}>
+                        <Embed
+                            link={Link.parseInner(embed.getAttribute("src") ?? "")}
+                            sourcePath={sourcePath}
+                            inline={true}
+                        />
+                    </APP_CONTEXT.Provider>,
+                    embed
+                );
+                embed.addClass("is-loaded");
+                embed = container.current.querySelector("span.internal-embed:not(.is-loaded)");
+            }
         });
-    }, [content, sourcePath, container.current]);
+    }, [content, sourcePath, inline, container.current]);
 
     return <span ref={container} style={style} className={cls} onClick={onClick}></span>;
 }
@@ -119,17 +143,20 @@ export const Markdown = memo(RawMarkdown);
 /** Intelligently render an arbitrary literal value. */
 export function RawLit({
     value,
-    sourcePath,
+    sourcePath: maybeSourcePath,
     inline = false,
     depth = 0,
 }: PropsWithChildren<{
     value: Literal | undefined;
-    sourcePath: string;
+    sourcePath?: string;
     inline?: boolean;
     depth?: number;
 }>) {
     const settings = useContext(SETTINGS_CONTEXT);
     const app = useContext(APP_CONTEXT);
+    const defaultPath = useContext(CURRENT_FILE_CONTEXT);
+
+    const sourcePath = maybeSourcePath ?? defaultPath;
 
     // Short-circuit if beyond the maximum render depth.
     if (depth >= settings.maxRecursiveRenderDepth) return <Fragment>...</Fragment>;
@@ -164,6 +191,8 @@ export function RawLit({
             else if (dimensions && dimensions.length == 1)
                 return <img alt={value.path} src={resourcePath} width={dimensions[0]} />;
             else return <img alt={value.path} src={resourcePath} />;
+        } else if (value.embed) {
+            return <Embed link={value} sourcePath={sourcePath} inline={inline} />;
         }
 
         return <ObsidianLink link={value} sourcePath={sourcePath} />;
@@ -267,39 +296,8 @@ export function SimpleErrorBoundary({
     const [error, reset] = useErrorBoundary();
 
     if (error) {
-        return <ErrorMessage title={title} message={message} error={error.message} reset={reset} />;
+        return <ErrorMessage title={title} message={message} error={error.stack} reset={reset} />;
     } else {
         return <Fragment>{children}</Fragment>;
-    }
-}
-
-/** A trivial wrapper which allows a react component to live for the duration of a `MarkdownRenderChild`. */
-export class ReactRenderer extends MarkdownRenderChild {
-    public constructor(
-        public app: App,
-        public datacore: Datacore,
-        public container: HTMLElement,
-        public sourcePath: string,
-        public element: VNode
-    ) {
-        super(container);
-    }
-
-    public onload(): void {
-        render(
-            <DatacoreContextProvider
-                app={this.app}
-                component={this}
-                datacore={this.datacore}
-                settings={this.datacore.settings}
-            >
-                {this.element}
-            </DatacoreContextProvider>,
-            this.container
-        );
-    }
-
-    public onunload(): void {
-        unmountComponentAtNode(this.container);
     }
 }

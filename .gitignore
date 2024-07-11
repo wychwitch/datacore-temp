@@ -1,5 +1,6 @@
 # Package artifacts.
 package-lock.json
+pnpm-lock.yaml
 node_modules/
 
 # Build artifacts.
@@ -7,6 +8,7 @@ build/
 
 # Various editor preferences.
 .vscode
+.idea/
 
 # Random crap.
 .DS_Store

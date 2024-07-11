@@ -12,10 +12,9 @@ import {
     Taggable,
 } from "index/types/indexable";
 import { DateTime } from "luxon";
-import { Extractors, FIELDBEARING_TYPE, Field, FieldExtractor, Fieldbearing } from "../../../expression/field";
-import { InlineField } from "index/import/inline-field";
+import { Extractors, FIELDBEARING_TYPE, Field, FieldExtractor, Fieldbearing } from "../../expression/field";
+import { InlineField, jsonInlineField, valueInlineField } from "index/import/inline-field";
 import {
-    FrontmatterEntry,
     LineSpan,
     JsonMarkdownPage,
     JsonMarkdownSection,
@@ -23,11 +22,12 @@ import {
     JsonMarkdownListBlock,
     JsonMarkdownListItem,
     JsonMarkdownTaskItem,
-} from "./json";
-
-/** A link normalizer which takes in a raw link and produces a normalized link. */
-export type LinkNormalizer = (link: Link) => Link;
-export const NOOP_NORMALIZER: LinkNormalizer = (x) => x;
+    JsonMarkdownDatablock as JsonMarkdownDatablock,
+    JsonMarkdownCodeblock,
+    JsonFrontmatterEntry,
+} from "./json/markdown";
+import { mapObjectValues } from "utils/data";
+import { JsonConversion } from "./json/common";
 
 /** A markdown file in the vault; the source of most metadata. */
 export class MarkdownPage implements File, Linkbearing, Taggable, Indexable, Fieldbearing {
@@ -80,15 +80,17 @@ export class MarkdownPage implements File, Linkbearing, Taggable, Indexable, Fie
 
         return new MarkdownPage({
             $path: raw.$path,
-            $frontmatter: raw.$frontmatter ? normalizeLinks(raw.$frontmatter, normalizer) : undefined,
-            $infields: normalizeLinks(raw.$infields, normalizer),
+            $frontmatter: raw.$frontmatter
+                ? mapObjectValues(raw.$frontmatter, (fm) => normalizeLinks(valueFrontmatterEntry(fm), normalizer))
+                : undefined,
+            $infields: mapObjectValues(raw.$infields, (field) => normalizeLinks(valueInlineField(field), normalizer)),
             $ctime: DateTime.fromMillis(raw.$ctime),
             $mtime: DateTime.fromMillis(raw.$mtime),
             $extension: raw.$extension,
             $size: raw.$size,
             $position: raw.$position,
             $tags: raw.$tags,
-            $links: raw.$links.map(normalizer),
+            $links: raw.$links.map((link) => normalizer(Link.fromObject(link))),
             $sections: sections,
         });
     }
@@ -128,19 +130,19 @@ export class MarkdownPage implements File, Linkbearing, Taggable, Indexable, Fie
     }
 
     /** Convert this page into it's partial representation for saving. */
-    public partial(): JsonMarkdownPage {
+    public json(): JsonMarkdownPage {
         return {
             $path: this.$path,
-            $frontmatter: this.$frontmatter,
-            $infields: this.$infields,
+            $frontmatter: this.$frontmatter ? mapObjectValues(this.$frontmatter, jsonFrontmatterEntry) : undefined,
+            $infields: mapObjectValues(this.$infields, jsonInlineField),
             $ctime: this.$ctime.toMillis(),
             $mtime: this.$mtime.toMillis(),
             $extension: this.$extension,
             $size: this.$size,
             $position: this.$position,
             $tags: this.$tags,
-            $links: this.$links,
-            $sections: this.$sections.map((sect) => sect.partial()),
+            $links: this.$links.map((link) => link.toObject()),
+            $sections: this.$sections.map((sect) => sect.json()),
         };
     }
 
@@ -189,9 +191,9 @@ export class MarkdownSection implements Indexable, Taggable, Linkable, Linkbeari
             $level: raw.$level,
             $position: raw.$position,
             $tags: raw.$tags,
-            $links: raw.$links.map(normalizer),
+            $links: raw.$links.map((l) => normalizer(Link.fromObject(l))),
             $blocks: blocks,
-            $infields: normalizeLinks(raw.$infields, normalizer),
+            $infields: mapObjectValues(raw.$infields, (i) => normalizeLinks(valueInlineField(i), normalizer)),
         });
     }
 
@@ -228,16 +230,16 @@ export class MarkdownSection implements Indexable, Taggable, Linkable, Linkbeari
         return this.field(key)?.value;
     }
 
-    public partial(): JsonMarkdownSection {
+    public json(): JsonMarkdownSection {
         return {
             $ordinal: this.$ordinal,
             $title: this.$title,
             $level: this.$level,
             $position: this.$position,
             $tags: this.$tags,
-            $links: this.$links,
-            $blocks: this.$blocks.map((block) => block.partial()),
-            $infields: this.$infields,
+            $links: this.$links.map((link) => link.toObject()),
+            $blocks: this.$blocks.map((block) => block.json()),
+            $infields: mapObjectValues(this.$infields, jsonInlineField),
         };
     }
 
@@ -281,6 +283,10 @@ export class MarkdownBlock implements Indexable, Linkbearing, Taggable, Fieldbea
     static from(object: JsonMarkdownBlock, file: string, normalizer: LinkNormalizer = NOOP_NORMALIZER): MarkdownBlock {
         if (object.$type === "list") {
             return MarkdownListBlock.from(object as JsonMarkdownListBlock, file, normalizer);
+        } else if (object.$type === "datablock") {
+            return MarkdownDatablock.from(object as JsonMarkdownDatablock, file, normalizer);
+        } else if (object.$type === "codeblock") {
+            return MarkdownCodeblock.from(object as JsonMarkdownCodeblock, file, normalizer);
         }
 
         return new MarkdownBlock({
@@ -289,8 +295,8 @@ export class MarkdownBlock implements Indexable, Linkbearing, Taggable, Fieldbea
             $ordinal: object.$ordinal,
             $position: object.$position,
             $tags: object.$tags,
-            $links: object.$links.map(normalizer),
-            $infields: normalizeLinks(object.$infields, normalizer),
+            $links: object.$links.map((l) => normalizer(Link.fromObject(l))),
+            $infields: mapObjectValues(object.$infields, (i) => normalizeLinks(valueInlineField(i), normalizer)),
             $blockId: object.$blockId,
             $type: object.$type,
         });
@@ -320,19 +326,19 @@ export class MarkdownBlock implements Indexable, Linkbearing, Taggable, Fieldbea
         return this.field(key)?.value;
     }
 
-    public partial(): JsonMarkdownBlock {
+    public json(): JsonMarkdownBlock {
         return {
             $ordinal: this.$ordinal,
             $position: this.$position,
             $tags: this.$tags,
-            $links: this.$links,
-            $infields: this.$infields,
+            $links: this.$links.map((l) => l.toObject()),
+            $infields: mapObjectValues(this.$infields, jsonInlineField),
             $blockId: this.$blockId,
             $type: this.$type,
         };
     }
 
-    private static FIELD_DEF: FieldExtractor<MarkdownBlock> = Extractors.merge(
+    static FIELD_DEF: FieldExtractor<MarkdownBlock> = Extractors.merge(
         Extractors.intrinsics(),
         Extractors.inlineFields((f) => f.$infields)
     );
@@ -367,18 +373,18 @@ export class MarkdownListBlock extends MarkdownBlock implements Taggable, Linkbe
             $ordinal: object.$ordinal,
             $position: object.$position,
             $tags: object.$tags,
-            $links: object.$links.map(normalizer),
-            $infields: normalizeLinks(object.$infields, normalizer),
+            $links: object.$links.map((l) => normalizer(Link.fromObject(l))),
+            $infields: mapObjectValues(object.$infields, (i) => normalizeLinks(valueInlineField(i), normalizer)),
             $blockId: object.$blockId,
             $elements: elements,
             $type: "list",
         });
     }
 
-    public partial(): JsonMarkdownBlock {
-        return Object.assign(super.partial(), {
-            $elements: this.$elements.map((elem) => elem.partial()),
-        });
+    public json(): JsonMarkdownListBlock {
+        return Object.assign(super.json(), {
+            $elements: this.$elements.map((elem) => elem.json()),
+        }) as JsonMarkdownListBlock;
     }
 
     public constructor(init: Partial<MarkdownListBlock>) {
@@ -386,8 +392,141 @@ export class MarkdownListBlock extends MarkdownBlock implements Taggable, Linkbe
     }
 }
 
+/** A block containing markdown code. */
+export class MarkdownCodeblock extends MarkdownBlock implements Indexable, Fieldbearing, Linkbearing {
+    static TYPES = ["markdown", "block", "codeblock", TAGGABLE_TYPE, LINKBEARING_TYPE, FIELDBEARING_TYPE];
+
+    $types: string[] = MarkdownCodeblock.TYPES;
+    $languages: string[];
+    $contentPosition: { start: number; end: number };
+    $style: "fenced" | "indent";
+
+    public constructor(init: Partial<MarkdownCodeblock>) {
+        super(init);
+    }
+
+    static from(
+        object: JsonMarkdownCodeblock,
+        file: string,
+        normalizer: LinkNormalizer = NOOP_NORMALIZER
+    ): MarkdownCodeblock {
+        return new MarkdownCodeblock({
+            $file: file,
+            $id: MarkdownCodeblock.readableId(file, object.$position.start),
+            $position: object.$position,
+            $ordinal: object.$ordinal,
+            $typename: "Codeblock",
+            $type: "codeblock",
+            $blockId: object.$blockId,
+            $languages: object.$languages,
+            $links: object.$links.map((link) => normalizer(Link.fromObject(link))),
+            $tags: object.$tags,
+            $infields: mapObjectValues(object.$infields, valueInlineField),
+            $contentPosition: object.$contentPosition,
+            $style: object.$style,
+        });
+    }
+
+    /** All of the indexed fields in this object. */
+    get fields() {
+        return MarkdownCodeblock.SUB_FIELD_DEF(this);
+    }
+
+    /** Fetch a specific field by key. */
+    public field(key: string) {
+        return MarkdownCodeblock.SUB_FIELD_DEF(this, key)?.[0];
+    }
+
+    public value(key: string): Literal | undefined {
+        return this.field(key)?.value;
+    }
+
+    public json(): JsonMarkdownCodeblock {
+        return Object.assign(super.json(), {
+            $languages: this.$languages,
+            $contentPosition: this.$contentPosition,
+            $style: this.$style,
+        }) as JsonMarkdownCodeblock;
+    }
+
+    static readableId(file: string, line: number): string {
+        return `${file}/codeblock${line}`;
+    }
+
+    static SUB_FIELD_DEF: FieldExtractor<MarkdownCodeblock> = Extractors.merge<MarkdownCodeblock>(
+        MarkdownBlock.FIELD_DEF
+    );
+}
+
+/** A data-annotated YAML codeblock. */
+export class MarkdownDatablock extends MarkdownBlock implements Indexable, Fieldbearing, Linkbearing {
+    static TYPES = ["markdown", "block", "datablock", TAGGABLE_TYPE, LINKBEARING_TYPE, FIELDBEARING_TYPE];
+
+    $types: string[] = MarkdownDatablock.TYPES;
+    $data: Record<string, FrontmatterEntry>;
+
+    public constructor(init: Partial<MarkdownDatablock>) {
+        super(init);
+    }
+
+    static from(
+        object: JsonMarkdownDatablock,
+        file: string,
+        normalizer: LinkNormalizer = NOOP_NORMALIZER
+    ): MarkdownDatablock {
+        // Datablocks are based on what is essentially just frontmatter; we can apply
+        // the same normalization logic to them.
+        const normdata = normalizeLinks(mapObjectValues(object.$data, valueFrontmatterEntry), normalizer);
+        const links = gatherLinks(normdata);
+        const tags = gatherTags(normdata);
+
+        return new MarkdownDatablock({
+            $file: file,
+            $id: MarkdownDatablock.readableId(file, object.$position.start),
+            $position: object.$position,
+            $infields: {},
+            $ordinal: object.$ordinal,
+            $data: normdata,
+            $links: links,
+            $typename: "Datablock",
+            $tags: tags,
+            $type: "datablock",
+            $blockId: object.$blockId,
+        });
+    }
+
+    /** All of the indexed fields in this object. */
+    get fields() {
+        return MarkdownDatablock.SUB_FIELD_DEF(this);
+    }
+
+    /** Fetch a specific field by key. */
+    public field(key: string) {
+        return MarkdownDatablock.SUB_FIELD_DEF(this, key)?.[0];
+    }
+
+    public value(key: string): Literal | undefined {
+        return this.field(key)?.value;
+    }
+
+    public json(): JsonMarkdownDatablock {
+        return Object.assign(super.json(), {
+            $data: mapObjectValues(this.$data, jsonFrontmatterEntry),
+        }) as JsonMarkdownDatablock;
+    }
+
+    static readableId(file: string, line: number): string {
+        return `${file}/datablock${line}`;
+    }
+
+    static SUB_FIELD_DEF: FieldExtractor<MarkdownDatablock> = Extractors.merge<MarkdownDatablock>(
+        MarkdownBlock.FIELD_DEF,
+        Extractors.frontmatter((f) => f.$data)
+    );
+}
+
 /** A specific list item in a list. */
-export class MarkdownListItem implements Linkbearing, Taggable, Fieldbearing {
+export class MarkdownListItem implements Indexable, Linkbearing, Taggable, Fieldbearing {
     static TYPES = ["markdown", "list-item", LINKBEARING_TYPE, TAGGABLE_TYPE, FIELDBEARING_TYPE];
 
     $types: string[] = MarkdownListItem.TYPES;
@@ -436,8 +575,8 @@ export class MarkdownListItem implements Linkbearing, Taggable, Fieldbearing {
             $elements: elements,
             $type: object.$type,
             $tags: object.$tags,
-            $infields: normalizeLinks(object.$infields, normalizer),
-            $links: object.$links.map(normalizer),
+            $infields: mapObjectValues(object.$infields, (i) => normalizeLinks(valueInlineField(i), normalizer)),
+            $links: object.$links.map((l) => normalizer(Link.fromObject(l))),
             $blockId: object.$blockId,
             $parentLine: object.$parentLine,
         });
@@ -471,13 +610,13 @@ export class MarkdownListItem implements Linkbearing, Taggable, Fieldbearing {
         return this.field(key)?.value;
     }
 
-    public partial(): JsonMarkdownListItem {
+    public json(): JsonMarkdownListItem {
         return {
             $position: this.$position,
-            $elements: this.$elements.map((elem) => elem.partial()),
+            $elements: this.$elements.map((elem) => elem.json()),
             $type: this.$type,
             $tags: this.$tags,
-            $infields: this.$infields,
+            $infields: mapObjectValues(this.$infields, jsonInlineField),
             $links: this.$links,
             $blockId: this.$blockId,
             $parentLine: this.$parentLine,
@@ -514,8 +653,8 @@ export class MarkdownTaskItem extends MarkdownListItem implements Indexable, Lin
             $elements: elements,
             $type: object.$type,
             $tags: object.$tags,
-            $infields: normalizeLinks(object.$infields, normalizer),
-            $links: object.$links.map(normalizer),
+            $infields: mapObjectValues(object.$infields, (i) => normalizeLinks(valueInlineField(i), normalizer)),
+            $links: object.$links.map((l) => normalizer(Link.fromObject(l))),
             $blockId: object.$blockId,
             $parentLine: object.$parentLine,
             $status: object.$status,
@@ -526,8 +665,8 @@ export class MarkdownTaskItem extends MarkdownListItem implements Indexable, Lin
         super(init);
     }
 
-    public partial(): JsonMarkdownListItem {
-        return Object.assign(super.partial(), {
+    public json(): JsonMarkdownListItem {
+        return Object.assign(super.json(), {
             $status: this.$status,
         });
     }
@@ -538,6 +677,34 @@ export class MarkdownTaskItem extends MarkdownListItem implements Indexable, Lin
     }
 }
 
+/** An entry in the frontmatter; includes the raw value, parsed value, and raw key (before lower-casing). */
+export interface FrontmatterEntry {
+    /** The actual string in frontmatter with exact casing. */
+    key: string;
+    /** The parsed value of the frontmatter entry (date, duration, etc.). */
+    value: Literal;
+    /** The raw value of the frontmatter entry before parsing; generally a string or number. */
+    raw: string;
+}
+
+/** Convert a regular frontmatter entry into a JSON frontmatter entry. */
+export function jsonFrontmatterEntry(raw: FrontmatterEntry): JsonFrontmatterEntry {
+    return {
+        key: raw.key,
+        value: JsonConversion.json(raw.value),
+        raw: raw.raw,
+    };
+}
+
+/** Convert a json frontmatter entry to a regular frontmatter entry. */
+export function valueFrontmatterEntry(raw: JsonFrontmatterEntry): FrontmatterEntry {
+    return {
+        key: raw.key,
+        value: JsonConversion.value(raw.value),
+        raw: raw.raw,
+    };
+}
+
 /** Normalize links deeply in the object. */
 function normalizeLinks<T extends Literal>(input: T, normalizer: LinkNormalizer): T {
     return Literals.mapLeaves(input, (value) => {
@@ -545,3 +712,34 @@ function normalizeLinks<T extends Literal>(input: T, normalizer: LinkNormalizer)
         else return value;
     }) as T;
 }
+
+/** Recursively gather links from a literal object. */
+function gatherLinks(input: Literal): Link[] {
+    const result: Link[] = [];
+
+    Literals.mapLeaves(input, (value) => {
+        if (Literals.isLink(value)) result.push(value);
+        return null;
+    });
+
+    return result;
+}
+
+/** Gather tags from a datablock. */
+function gatherTags(data: Record<string, FrontmatterEntry>): string[] {
+    function recurse(input: any): string[] {
+        if (Literals.isString(input)) return [input.startsWith("#") ? input : "#" + input];
+        else if (Literals.isArray(input)) return input.flatMap(recurse);
+        else return [];
+    }
+
+    let tags: string[] = [];
+    if ("tag" in data) tags = tags.concat(recurse(data["tags"]));
+    if ("tags" in data) tags = tags.concat(recurse(data["tags"]));
+
+    return tags;
+}
+
+/** A link normalizer which takes in a raw link and produces a normalized link. */
+export type LinkNormalizer = (link: Link) => Link;
+export const NOOP_NORMALIZER: LinkNormalizer = (x) => x;
