@@ -129,9 +129,9 @@ export namespace TreeUtils {
         return initial;
     }
     /** recursively sort a tree */
-    export function sort<T>(
+    export function sort<T, V = Literal>(
         rows: (TreeTableRowData<T> | GroupElement<TreeTableRowData<T>>)[],
-        comparators: { fn: (a: T, b: T) => number; direction: SortDirection }[]
+        comparators: { fn: (a: V, b: V, ao: T, ab: T) => number; direction: SortDirection; actualValue: (obj: T) => V }[]
     ): (TreeTableRowData<T> | GroupElement<TreeTableRowData<T>>)[] {
         const realComparator = (
             a: TreeTableRowData<T> | GroupElement<TreeTableRowData<T>>,
@@ -141,9 +141,9 @@ export namespace TreeUtils {
                 const direction = comp.direction.toLocaleLowerCase() === "ascending" ? 1 : -1;
                 let result = 0;
                 if (Groupings.isElementGroup(a) && Groupings.isElementGroup(b)) {
-                    result = direction * comp.fn(a.key as T, b.key as T);
+                    result = direction * comp.fn(a.key as V, b.key as V, a.key as T, b.key as T);
                 } else if (!Groupings.isElementGroup(a) && !Groupings.isElementGroup(b)) {
-                    result = direction * comp.fn(a.value, b.value);
+                    result = direction * comp.fn(comp.actualValue(a.value), comp.actualValue(b.value), a.value, b.value);
                 }
                 if (result != 0) return result;
             }
@@ -152,12 +152,13 @@ export namespace TreeUtils {
         const map = (
             t: TreeTableRowData<T> | GroupElement<TreeTableRowData<T>>
         ): TreeTableRowData<T> | GroupElement<TreeTableRowData<T>> => {
+					let r;
             if (Groupings.isElementGroup(t))
-                return { ...t, rows: sort(t.rows, comparators).map(map) } as GroupElement<TreeTableRowData<T>>;
-            else return { ...t, children: sort(t.children, comparators).map(map) } as TreeTableRowData<T>;
+                r = { ...t, rows: sort(t.rows.map(map), comparators) } as GroupElement<TreeTableRowData<T>>;
+            else r = { ...t, children: sort(t.children.map(map), comparators) } as TreeTableRowData<T>;
+					return r;
         };
-        rows.sort(realComparator);
-        return rows.map(map);
+        return rows.map(map).sort(realComparator);
     }
 }
 
@@ -477,13 +478,15 @@ export function ControlledTreeTableView<T>(
     const rows = useMemo(() => {
         if (sorts == undefined || sorts.length == 0) return rawRows;
         const comparators = sorts.map((x) => {
-            const comp = columns.find((y) => y.id == x.id)?.comparator ?? DEFAULT_TABLE_COMPARATOR;
+					const col = columns.find(y => y.id == x.id)!
+            const comp = col?.comparator ?? DEFAULT_TABLE_COMPARATOR;
             return {
-                fn: (a: T, b: T) => comp(a as Literal, b as Literal, a, b),
+								fn: comp,
                 direction: x.direction,
+								actualValue: col.value
             };
         });
-        return TreeUtils.sort(rawRows, comparators) as Grouping<TreeTableRowData<T>>;
+        return TreeUtils.sort<T, Literal>(rawRows, comparators) as Grouping<TreeTableRowData<T>>;
     }, [rawRows, sorts]);
 
     const tableRef = useRef<HTMLDivElement>(null);
@@ -506,7 +509,7 @@ export function ControlledTreeTableView<T>(
         if (paging.enabled)
             return TreeUtils.slice(rows, paging.page * paging.pageSize, (paging.page + 1) * paging.pageSize);
         return rows;
-    }, [paging.page, paging.pageSize, paging.enabled, props.rows]);
+    }, [paging.page, paging.pageSize, paging.enabled, props.rows, rows]);
     const Context = TypedExpandedContext<T>();
     return (
         <Context.Provider value={{ openMap: props.openMap, dispatch: props.dispatch }}>
@@ -543,6 +546,6 @@ export function TreeTableView<T>(props: TreeTableProps<T>) {
         sortOn: props.sortOn ?? [],
         openMap: new Map<T, boolean>(),
     }));
-
+		delete props.sortOn;
     return <ControlledTreeTableView<T> dispatch={dispatch} {...props} {...state} />;
 }
