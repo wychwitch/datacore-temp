@@ -332,12 +332,12 @@ export function TreeTableRowGroup<T>({
     }
 }
 
-export function TreeTableRowExpander<T>({ row }: { row: T }) {
+export function TreeTableRowExpander<T>({ row, level }: { row: T, level: number; }) {
     const { openMap, dispatch } = useContext(TypedExpandedContext<T>());
     const open = useMemo(() => openMap.get(row) ?? false, [row, openMap, openMap.get(row), dispatch]);
     return (
-        <div
-            onClick={() => dispatch({ type: "row-expand", row, newValue: !open })}
+			<td onClick={() => dispatch({ type: "row-expand", row, newValue: !open })} style={{ paddingLeft: `${(level - 1) * 1.125}em` }}>
+        <div 
             className={combineClasses("datacore-collapser", !open ? "is-collapsed" : undefined)}
             dir="auto"
         >
@@ -356,6 +356,7 @@ export function TreeTableRowExpander<T>({ row }: { row: T }) {
                 <path d="M3 8L12 17L21 8"></path>
             </svg>
         </div>
+			</td>
     );
 }
 
@@ -374,9 +375,7 @@ export function TreeTableRow<T>({
     return (
         <Fragment>
             <tr className="datacore-table-row">
-                <td style={{ paddingLeft: `${(level - 1) * 1.125}em` }}>
-                    {hasChildren ? <TreeTableRowExpander<T> row={row.value} /> : null}
-                </td>
+                    {hasChildren ? <TreeTableRowExpander<T> level={level} row={row.value} /> : <td></td>}
                 {columns.map((col, i) => (
                     <TreeTableRowCell<T> row={row} column={col} level={level} isFirst={i == 0} />
                 ))}
