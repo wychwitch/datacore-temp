@@ -141,7 +141,7 @@ export namespace TreeUtils {
                 const direction = comp.direction.toLocaleLowerCase() === "ascending" ? 1 : -1;
                 let result = 0;
                 if (Groupings.isElementGroup(a) && Groupings.isElementGroup(b)) {
-                    result = direction * comp.fn(a.key as V, b.key as V, a.key as T, b.key as T);
+                    result = 0 
                 } else if (!Groupings.isElementGroup(a) && !Groupings.isElementGroup(b)) {
                     result = direction * comp.fn(comp.actualValue(a.value), comp.actualValue(b.value), a.value, b.value);
                 }
@@ -154,8 +154,8 @@ export namespace TreeUtils {
         ): TreeTableRowData<T> | GroupElement<TreeTableRowData<T>> => {
 					let r;
             if (Groupings.isElementGroup(t))
-                r = { ...t, rows: sort(t.rows.map(map), comparators) } as GroupElement<TreeTableRowData<T>>;
-            else r = { ...t, children: sort(t.children.map(map), comparators) } as TreeTableRowData<T>;
+                r = { ...t, rows: sort(t.rows, comparators).map(map)} as GroupElement<TreeTableRowData<T>>;
+            else r = { ...t, children: sort(t.children, comparators).map(map) } as TreeTableRowData<T>;
 					return r;
         };
         return rows.map(map).sort(realComparator);
