@@ -27,6 +27,7 @@ import { ScriptCache } from "./script-cache";
 import { setTaskText, useSetField } from "utils/fields";
 import { ControlledTextEditable, EditableFieldCheckbox, EditableTextField } from "ui/fields/editable-fields";
 import { compeleteTask, rewriteTask } from "utils/task";
+import { TreeTableView } from "./ui/views/tree-table";
 
 /** Local API provided to specific codeblocks when they are executing. */
 export class DatacoreLocalApi {
@@ -307,6 +308,7 @@ export class DatacoreLocalApi {
     public TaskList = TaskList;
     public VanillaTable = VanillaTable;
     public Card = Card;
+		public TreeTable = TreeTableView;
 
     /////////////////////////
     // Interative elements //
