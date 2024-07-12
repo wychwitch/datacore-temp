@@ -253,7 +253,7 @@ export function TableRowCell<T>({ row, column }: { row: T; column: VanillaColumn
 }
 
 /** Ensure that a given literal or element input is rendered as a JSX.Element. */
-function useAsElement(element: VNode | Literal): VNode {
+export function useAsElement(element: VNode | Literal): VNode {
     const sourcePath = useContext(CURRENT_FILE_CONTEXT);
 
     return useMemo(() => {
