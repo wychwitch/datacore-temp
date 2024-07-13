@@ -1,13 +1,14 @@
 import { GroupElement, Grouping, Groupings, Literal, Literals } from "expression/literal";
 import { GroupingConfig, useAsElement, VanillaColumn, VanillaTableProps } from "./vanilla-table";
 import { useInterning, useStableCallback } from "ui/hooks";
-import { Dispatch, Reducer, useCallback, useContext, useMemo, useReducer, useRef } from "preact/hooks";
+import { Dispatch, Reducer, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from "preact/hooks";
 import { ControlledPager, useDatacorePaging } from "./paging";
 import { DEFAULT_TABLE_COMPARATOR, SortButton, SortDirection, SortOn } from "./table";
 import { Context, createContext, Fragment, VNode } from "preact";
 import { CURRENT_FILE_CONTEXT, Lit } from "ui/markdown";
 import { Editable, useEditableDispatch } from "ui/fields/editable";
 import { combineClasses } from "../basics";
+import { Indexable } from "index/types/indexable";
 
 export interface TreeTableRowData<T> {
     value: T;
@@ -118,12 +119,12 @@ export namespace TreeUtils {
                 (initial[index] as GroupElement<TreeTableRowData<T>>).rows = Groupings.slice(
                     element.rows,
                     groupStart,
-                    groupEnd 
+                    groupEnd
                 );
                 seen += groupSize;
             } else {
-							seen += countInTreeRow(element)
-						}
+                seen += countInTreeRow(element);
+            }
             index++;
         }
         return initial;
@@ -131,7 +132,11 @@ export namespace TreeUtils {
     /** recursively sort a tree */
     export function sort<T, V = Literal>(
         rows: (TreeTableRowData<T> | GroupElement<TreeTableRowData<T>>)[],
-        comparators: { fn: (a: V, b: V, ao: T, ab: T) => number; direction: SortDirection; actualValue: (obj: T) => V }[]
+        comparators: {
+            fn: (a: V, b: V, ao: T, ab: T) => number;
+            direction: SortDirection;
+            actualValue: (obj: T) => V;
+        }[]
     ): (TreeTableRowData<T> | GroupElement<TreeTableRowData<T>>)[] {
         const realComparator = (
             a: TreeTableRowData<T> | GroupElement<TreeTableRowData<T>>,
@@ -141,9 +146,10 @@ export namespace TreeUtils {
                 const direction = comp.direction.toLocaleLowerCase() === "ascending" ? 1 : -1;
                 let result = 0;
                 if (Groupings.isElementGroup(a) && Groupings.isElementGroup(b)) {
-                    result = 0 
+                    result = 0;
                 } else if (!Groupings.isElementGroup(a) && !Groupings.isElementGroup(b)) {
-                    result = direction * comp.fn(comp.actualValue(a.value), comp.actualValue(b.value), a.value, b.value);
+                    result =
+                        direction * comp.fn(comp.actualValue(a.value), comp.actualValue(b.value), a.value, b.value);
                 }
                 if (result != 0) return result;
             }
@@ -152,11 +158,11 @@ export namespace TreeUtils {
         const map = (
             t: TreeTableRowData<T> | GroupElement<TreeTableRowData<T>>
         ): TreeTableRowData<T> | GroupElement<TreeTableRowData<T>> => {
-					let r;
+            let r;
             if (Groupings.isElementGroup(t))
-                r = { ...t, rows: sort(t.rows, comparators).map(map)} as GroupElement<TreeTableRowData<T>>;
+                r = { ...t, rows: sort(t.rows, comparators).map(map) } as GroupElement<TreeTableRowData<T>>;
             else r = { ...t, children: sort(t.children, comparators).map(map) } as TreeTableRowData<T>;
-					return r;
+            return r;
         };
         return rows.map(map).sort(realComparator);
     }
@@ -170,7 +176,8 @@ export interface TreeTableColumn<T, V = Literal> extends VanillaColumn<T, V> {
 
 export interface TreeTableState<T> {
     sortOn?: SortOn[];
-    openMap: Map<T, boolean>;
+    openMap?: Map<string, boolean>;
+		id: (obj: T) => string;
 }
 
 export interface TreeTableProps<T> {
@@ -181,6 +188,7 @@ export interface TreeTableProps<T> {
     groupings?: VanillaTableProps<TreeTableRowData<T>>["groupings"];
     sortOn?: SortOn[];
     childSelector: (raw: T) => T[];
+		id?: (obj: T) => string;
 }
 
 export type TreeTableAction<T> =
@@ -189,7 +197,8 @@ export type TreeTableAction<T> =
           type: "row-expand";
           row: T;
           newValue: boolean;
-      };
+      }
+    | { type: "open-map-changed"; newValue: Map<string, boolean> };
 
 export function treeTableReducer<T>(state: TreeTableState<T>, action: TreeTableAction<T>): TreeTableState<T> {
     switch (action.type) {
@@ -209,10 +218,13 @@ export function treeTableReducer<T>(state: TreeTableState<T>, action: TreeTableA
                 };
             }
         case "row-expand":
-            const newMap = new Map<T, boolean>();
+            const newMap = new Map<string, boolean>();
+            if (!state.openMap) return { ...state };
             for (const k of state.openMap.keys()) newMap.set(k, state.openMap.get(k)!);
-            newMap.set(action.row, action.newValue);
+            newMap.set(state.id(action.row), action.newValue);
             return { ...state, openMap: newMap };
+        case "open-map-changed":
+            return { ...state, openMap: action.newValue };
     }
     console.warn("datacore: Encountered unrecognized operation: " + (action as TreeTableAction<T>).type);
     return state;
@@ -225,7 +237,7 @@ export function useTreeTableDispatch<T>(
     return useReducer(treeTableReducer as Reducer<TreeTableState<T>, TreeTableAction<T>>, init);
 }
 
-export type RowExpansionContextType<T> = { dispatch: Dispatch<TreeTableAction<T>>; openMap: Map<T, boolean> };
+export type RowExpansionContextType<T> = { dispatch: Dispatch<TreeTableAction<T>>; openMap: Map<string, boolean>; id: (obj: T) => string; };
 
 export const EXPANDED_CONTEXT = createContext<RowExpansionContextType<unknown> | null>(null);
 
@@ -332,31 +344,31 @@ export function TreeTableRowGroup<T>({
     }
 }
 
-export function TreeTableRowExpander<T>({ row, level }: { row: T, level: number; }) {
-    const { openMap, dispatch } = useContext(TypedExpandedContext<T>());
-    const open = useMemo(() => openMap.get(row) ?? false, [row, openMap, openMap.get(row), dispatch]);
+export function TreeTableRowExpander<T>({ row, level }: { row: T; level: number }) {
+    const { openMap, dispatch, id } = useContext(TypedExpandedContext<T>());
+    const open = useMemo(() => openMap.get(id(row)) ?? false, [row, openMap, openMap.get(id(row)), dispatch]);
     return (
-			<td onClick={() => dispatch({ type: "row-expand", row, newValue: !open })} style={{ paddingLeft: `${(level - 1) * 1.125}em` }}>
-        <div 
-            className={combineClasses("datacore-collapser", !open ? "is-collapsed" : undefined)}
-            dir="auto"
+        <td
+            onClick={() => dispatch({ type: "row-expand", row, newValue: !open })}
+            style={{ paddingLeft: `${(level - 1) * 1.125}em` }}
         >
-            <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                className="svg-icon right-triangle"
-            >
-                <path d="M3 8L12 17L21 8"></path>
-            </svg>
-        </div>
-			</td>
+            <div className={combineClasses("datacore-collapser", !open ? "is-collapsed" : undefined)} dir="auto">
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    className="svg-icon right-triangle"
+                >
+                    <path d="M3 8L12 17L21 8"></path>
+                </svg>
+            </div>
+        </td>
     );
 }
 
@@ -369,13 +381,13 @@ export function TreeTableRow<T>({
     row: TreeTableRowData<T>;
     columns: TreeTableColumn<T>[];
 }) {
-    const { openMap } = useContext(TypedExpandedContext<T>());
-    const open = useMemo(() => openMap.get(row.value), [openMap, openMap.get(row.value), row]);
+    const { openMap, id } = useContext(TypedExpandedContext<T>());
+    const open = useMemo(() => openMap.get(id(row.value)), [openMap, openMap.get(id(row.value)), row]);
     const hasChildren = useMemo(() => row.children.length > 0, [row]);
     return (
         <Fragment>
             <tr className="datacore-table-row">
-                    {hasChildren ? <TreeTableRowExpander<T> level={level} row={row.value} /> : <td></td>}
+                {hasChildren ? <TreeTableRowExpander<T> level={level} row={row.value} /> : <td></td>}
                 {columns.map((col, i) => (
                     <TreeTableRowCell<T> row={row} column={col} level={level} isFirst={i == 0} />
                 ))}
@@ -477,12 +489,12 @@ export function ControlledTreeTableView<T>(
     const rows = useMemo(() => {
         if (sorts == undefined || sorts.length == 0) return rawRows;
         const comparators = sorts.map((x) => {
-					const col = columns.find(y => y.id == x.id)!
+            const col = columns.find((y) => y.id == x.id)!;
             const comp = col?.comparator ?? DEFAULT_TABLE_COMPARATOR;
             return {
-								fn: comp,
+                fn: comp,
                 direction: x.direction,
-								actualValue: col.value
+                actualValue: col.value,
             };
         });
         return TreeUtils.sort<T, Literal>(rawRows, comparators) as Grouping<TreeTableRowData<T>>;
@@ -511,7 +523,7 @@ export function ControlledTreeTableView<T>(
     }, [paging.page, paging.pageSize, paging.enabled, props.rows, rows]);
     const Context = TypedExpandedContext<T>();
     return (
-        <Context.Provider value={{ openMap: props.openMap, dispatch: props.dispatch }}>
+        <Context.Provider value={{ openMap: props.openMap!, dispatch: props.dispatch, id: props.id }}>
             <div ref={tableRef}>
                 <table className="datacore-table">
                     <thead>
@@ -541,10 +553,19 @@ export function ControlledTreeTableView<T>(
 }
 
 export function TreeTableView<T>(props: TreeTableProps<T>) {
-    const [state, dispatch] = useTreeTableDispatch(() => ({
+    const [state, dispatch] = useTreeTableDispatch<T>({
         sortOn: props.sortOn ?? [],
-        openMap: new Map<T, boolean>(),
-    }));
-		delete props.sortOn;
-    return <ControlledTreeTableView<T> dispatch={dispatch} {...props} {...state} />;
+				id: props.id ? props.id : (x) => (x as Indexable).$id
+    });
+
+    const refState = useMemo(() => useRef(state), [state]);
+    if (state.openMap !== undefined) refState.current = state;
+    else refState.current.openMap = new Map<string, boolean>();
+    useEffect(() => {
+        // debugger;
+
+        dispatch({ type: "open-map-changed", newValue: refState.current.openMap ?? new Map<string, boolean>() });
+    }, [dispatch]);
+    delete props.sortOn;
+    return <ControlledTreeTableView<T> dispatch={dispatch} {...state} {...props} />;
 }
