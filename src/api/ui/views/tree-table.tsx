@@ -562,8 +562,6 @@ export function TreeTableView<T>(props: TreeTableProps<T>) {
     if (state.openMap !== undefined) refState.current = state;
     else refState.current.openMap = new Map<string, boolean>();
     useEffect(() => {
-        // debugger;
-
         dispatch({ type: "open-map-changed", newValue: refState.current.openMap ?? new Map<string, boolean>() });
     }, [dispatch]);
     delete props.sortOn;
