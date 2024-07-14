@@ -25,9 +25,14 @@ import { DataArray } from "./data-array";
 import { Coerce } from "./coerce";
 import { ScriptCache } from "./script-cache";
 import { setTaskText, useSetField } from "utils/fields";
-import { ControlledEditableCheckbox, ControlledEditableTextField, EditableFieldCheckbox, EditableTextField } from "ui/fields/editable-fields";
+import {
+    ControlledEditableCheckbox,
+    ControlledEditableTextField,
+    EditableFieldCheckbox,
+    EditableTextField,
+} from "ui/fields/editable-fields";
 import { completeTask } from "utils/task";
-import {TreeTableView} from "./ui/views/tree-table";
+import { TreeTableView } from "./ui/views/tree-table";
 
 /** Local API provided to specific codeblocks when they are executing. */
 export class DatacoreLocalApi {
@@ -144,12 +149,12 @@ export class DatacoreLocalApi {
         return DataArray.wrap(input);
     }
 
-		public async setTaskText(newText: string, task: MarkdownTaskItem): Promise<void>  {
-			await setTaskText(newText, task, this.core.vault);
-		}
-		public setTaskCompletion(completed: boolean, task: MarkdownTaskItem): void {
-			completeTask(completed, task, this.core)
-		}
+    public async setTaskText(newText: string, task: MarkdownTaskItem): Promise<void> {
+        await setTaskText(newText, task, this.core.vault);
+    }
+    public setTaskCompletion(completed: boolean, task: MarkdownTaskItem): void {
+        completeTask(completed, task, this.core);
+    }
 
     /////////////
     //  Hooks  //
@@ -166,7 +171,7 @@ export class DatacoreLocalApi {
     public useRef = hooks.useRef;
     public useInterning = useInterning;
 
-		public useSetField = useSetField;
+    public useSetField = useSetField;
 
     /** Memoize the input automatically and process it using a Data Array; returns a vanilla array back. */
     public useArray<T, U>(input: T[] | DataArray<T>, process: (data: DataArray<T>) => DataArray<U>, deps?: any[]): U[] {
@@ -308,7 +313,7 @@ export class DatacoreLocalApi {
     public TaskList = TaskList;
     public VanillaTable = VanillaTable;
     public Card = Card;
-		public TreeTable = TreeTableView;
+    public TreeTable = TreeTableView;
 
     /////////////////////////
     // Interative elements //
@@ -323,10 +328,10 @@ export class DatacoreLocalApi {
     public VanillaSelect = VanillaSelect;
 
     /////////////////////////
-		//    field editors    //
-		/////////////////////////
-		public EditableFieldCheckbox = EditableFieldCheckbox;
-		public EditableFieldTextbox = EditableTextField;
-		public EditableCheckbox = ControlledEditableCheckbox;
-		public TextEditor = ControlledEditableTextField;
+    //    field editors    //
+    /////////////////////////
+    public EditableFieldCheckbox = EditableFieldCheckbox;
+    public EditableFieldTextbox = EditableTextField;
+    public EditableCheckbox = ControlledEditableCheckbox;
+    public TextEditor = ControlledEditableTextField;
 }

@@ -38,15 +38,15 @@ export function ControlledEditableTextField(props: {
     dispatch: Dispatch<EditableAction<string>>;
 }) {
     const { text, inline, dispatch } = props;
-		const [textState, setText] = useState(text)
+    const [textState, setText] = useState(text);
     const onInput = async (e: KeyboardEvent) => {
-				setText((e.currentTarget as HTMLInputElement).value)
-        
+        setText((e.currentTarget as HTMLInputElement).value);
+
         if (props.inline) {
             if (e.key === "Enter") {
                 e.preventDefault();
                 await useFinalizer(textState, dispatch)();
-            } 
+            }
         } else {
             if (e.key === "Enter" && e.ctrlKey) {
                 e.preventDefault();
@@ -56,11 +56,22 @@ export function ControlledEditableTextField(props: {
     };
     return <UncontrolledTextEditable text={text} inline={inline} dispatch={dispatch} onInput={onInput} />;
 }
-export function ControlledEditableCheckbox(props: {
-	onUpdate: (val: boolean) => void;
-	initial: boolean;
-	className: string;
-} & HTMLProps<HTMLInputElement>) {
-	const {onUpdate, initial, className, ...rest} = props;
-	return <Checkbox {...rest} className={className} checked={initial} onCheckChange={onUpdate} disabled={false} defaultChecked={initial}/>
+export function ControlledEditableCheckbox(
+    props: {
+        onUpdate: (val: boolean) => void;
+        initial: boolean;
+        className: string;
+    } & HTMLProps<HTMLInputElement>
+) {
+    const { onUpdate, initial, className, ...rest } = props;
+    return (
+        <Checkbox
+            {...rest}
+            className={className}
+            checked={initial}
+            onCheckChange={onUpdate}
+            disabled={false}
+            defaultChecked={initial}
+        />
+    );
 }

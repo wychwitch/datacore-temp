@@ -177,7 +177,7 @@ export interface TreeTableColumn<T, V = Literal> extends VanillaColumn<T, V> {
 export interface TreeTableState<T> {
     sortOn?: SortOn[];
     openMap?: Map<string, boolean>;
-		id: (obj: T) => string;
+    id: (obj: T) => string;
 }
 
 export interface TreeTableProps<T> {
@@ -188,7 +188,7 @@ export interface TreeTableProps<T> {
     groupings?: VanillaTableProps<TreeTableRowData<T>>["groupings"];
     sortOn?: SortOn[];
     childSelector: (raw: T) => T[];
-		id?: (obj: T) => string;
+    id?: (obj: T) => string;
 }
 
 export type TreeTableAction<T> =
@@ -237,7 +237,11 @@ export function useTreeTableDispatch<T>(
     return useReducer(treeTableReducer as Reducer<TreeTableState<T>, TreeTableAction<T>>, init);
 }
 
-export type RowExpansionContextType<T> = { dispatch: Dispatch<TreeTableAction<T>>; openMap: Map<string, boolean>; id: (obj: T) => string; };
+export type RowExpansionContextType<T> = {
+    dispatch: Dispatch<TreeTableAction<T>>;
+    openMap: Map<string, boolean>;
+    id: (obj: T) => string;
+};
 
 export const EXPANDED_CONTEXT = createContext<RowExpansionContextType<unknown> | null>(null);
 
@@ -555,7 +559,7 @@ export function ControlledTreeTableView<T>(
 export function TreeTableView<T>(props: TreeTableProps<T>) {
     const [state, dispatch] = useTreeTableDispatch<T>({
         sortOn: props.sortOn ?? [],
-				id: props.id ? props.id : (x) => (x as Indexable).$id
+        id: props.id ? props.id : (x) => (x as Indexable).$id,
     });
 
     const refState = useMemo(() => useRef(state), [state]);

@@ -149,7 +149,11 @@ export function Task({ item, state: props }: { item: MarkdownTaskItem; state: Ta
                 <div className="datacore-list-item-content">
                     {theElement}
                     <div className="datacore-list-item-fields">
-                        <ListItemFields displayedFields={props.displayedFields} item={item} completedRef={completedRef} />
+                        <ListItemFields
+                            displayedFields={props.displayedFields}
+                            item={item}
+                            completedRef={completedRef}
+                        />
                     </div>
                 </div>
             </div>
@@ -192,11 +196,11 @@ function CollapseIndicator({
 export function ListItemFields({
     displayedFields = [],
     item,
-		completedRef
+    completedRef,
 }: {
     displayedFields?: TaskProps["displayedFields"];
     item: MarkdownTaskItem;
-		completedRef: Ref<Dispatch<EditableAction<Literal>>>
+    completedRef: Ref<Dispatch<EditableAction<Literal>>>;
 }) {
     const app = useContext(APP_CONTEXT);
     const core = useContext(DATACORE_CONTEXT);
