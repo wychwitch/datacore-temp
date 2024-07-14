@@ -7,6 +7,9 @@ import { VNode, isValidElement } from "preact";
 import { ControlledPager, useDatacorePaging } from "./paging";
 
 import "./table.css";
+import { combineClasses } from "../basics";
+import { Editable, EditableAction, useEditableDispatch } from "ui/fields/editable";
+import { Filter, useFilterDispatch } from "ui/filter";
 
 /** A simple column definition which allows for custom renderers and titles. */
 export interface VanillaColumn<T, V = Literal> {
@@ -54,6 +57,9 @@ export interface VanillaTableProps<T> {
      * If a number, will scroll only if the number is greater than the current page size.
      **/
     scrollOnPaging?: boolean | number;
+
+		/** Whether to enable filtering on this table */
+		filterable?: boolean;
 }
 
 export function VanillaTable<T>(props: VanillaTableProps<T>) {
@@ -64,7 +70,15 @@ export function VanillaTable<T>(props: VanillaTableProps<T>) {
         return a.every((value, index) => value == b[index]);
     });
 
-    const totalElements = useMemo(() => Groupings.count(props.rows), [props.rows]);
+		// filtering 
+		const [filterState, filterDispatch] = useFilterDispatch<T>(() => ({
+			allItems: props.rows,
+			filter: "",
+			filteredItems: props.rows
+		}));
+
+
+    const totalElements = useMemo(() => Groupings.count(filterState.filteredItems), [filterState.filteredItems]);
     const paging = useDatacorePaging({
         initialPage: 0,
         paging: props.paging,
@@ -90,9 +104,9 @@ export function VanillaTable<T>(props: VanillaTableProps<T>) {
 
     const pagedRows = useMemo(() => {
         if (paging.enabled)
-            return Groupings.slice(props.rows, paging.page * paging.pageSize, (paging.page + 1) * paging.pageSize);
+            return Groupings.slice(filterState.filteredItems, paging.page * paging.pageSize, (paging.page + 1) * paging.pageSize);
         else return props.rows;
-    }, [paging.page, paging.pageSize, paging.enabled, props.rows]);
+    }, [paging.page, paging.pageSize, paging.enabled, filterState.filteredItems]);
 
     const groupings = useMemo(() => {
         if (!props.groupings) return undefined;
@@ -104,6 +118,7 @@ export function VanillaTable<T>(props: VanillaTableProps<T>) {
 
     return (
         <div ref={tableRef}>
+						{props.filterable && <Filter initialFilter={filterState.filter} dispatch={filterDispatch} state={filterState}/>}
             <table className="datacore-table">
                 <thead>
                     <tr className="datacore-table-header-row">
