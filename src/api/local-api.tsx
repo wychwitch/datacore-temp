@@ -4,7 +4,7 @@ import { Datacore } from "index/datacore";
 import { SearchResult } from "index/datastore";
 import { IndexQuery } from "index/types/index-query";
 import { Indexable } from "index/types/indexable";
-import { MarkdownCodeblock, MarkdownPage, MarkdownTaskItem } from "index/types/markdown";
+import { MarkdownPage, MarkdownTaskItem } from "index/types/markdown";
 import { App } from "obsidian";
 import { useFileMetadata, useFullQuery, useIndexUpdates, useInterning, useQuery } from "ui/hooks";
 import * as luxon from "luxon";
@@ -25,9 +25,9 @@ import { DataArray } from "./data-array";
 import { Coerce } from "./coerce";
 import { ScriptCache } from "./script-cache";
 import { setTaskText, useSetField } from "utils/fields";
-import { ControlledTextEditable, EditableFieldCheckbox, EditableTextField } from "ui/fields/editable-fields";
-import { compeleteTask, rewriteTask } from "utils/task";
-import { TreeTableView } from "./ui/views/tree-table";
+import { ControlledEditableCheckbox, ControlledEditableTextField, EditableFieldCheckbox, EditableTextField } from "ui/fields/editable-fields";
+import { completeTask } from "utils/task";
+import {TreeTableView} from "./ui/views/tree-table";
 
 /** Local API provided to specific codeblocks when they are executing. */
 export class DatacoreLocalApi {
@@ -144,11 +144,11 @@ export class DatacoreLocalApi {
         return DataArray.wrap(input);
     }
 
-		public setTaskText(newText: string, task: MarkdownTaskItem): void  {
-			setTaskText(newText, task);
+		public async setTaskText(newText: string, task: MarkdownTaskItem): Promise<void>  {
+			await setTaskText(newText, task, this.core.vault);
 		}
 		public setTaskCompletion(completed: boolean, task: MarkdownTaskItem): void {
-			compeleteTask(completed, task, this.core)
+			completeTask(completed, task, this.core)
 		}
 
     /////////////
@@ -327,5 +327,6 @@ export class DatacoreLocalApi {
 		/////////////////////////
 		public EditableFieldCheckbox = EditableFieldCheckbox;
 		public EditableFieldTextbox = EditableTextField;
-		public TextEditor = ControlledTextEditable;
+		public EditableCheckbox = ControlledEditableCheckbox;
+		public TextEditor = ControlledEditableTextField;
 }
