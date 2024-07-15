@@ -11,7 +11,7 @@ import { GenericFile } from "./types/files";
 import { DateTime } from "luxon";
 import { EmbedQueue } from "./embed-queue";
 import { JsonMarkdownPage } from "./types/json/markdown";
-import { PDF } from "./types/pdf/pdf";
+import { PDF } from "./types/pdf";
 import { Canvas, CanvasTextCard } from "./types/canvas";
 
 /** Central API object; handles initialization, events, debouncing, and access to datacore functionality. */
