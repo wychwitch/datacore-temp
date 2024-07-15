@@ -199,9 +199,9 @@ export class Datacore extends Component {
             // And finally trigger an update.
             this.trigger("update", this.revision);
             return parsed;
-        } else if((result as PdfImportResult).type.toLocaleLowerCase() == "pdf") {
+        } else if(result.type === "pdf") {
             this.trigger("update", this.revision);
-            let parsed = PDF.from((result as PdfImportResult).result);
+            let parsed = PDF.from(result.result);
             this.datastore.store(parsed);
             return parsed
         } else if (result.type === "canvas") {
