@@ -10,6 +10,8 @@ import { Component, MarkdownPostProcessorContext, MarkdownRenderChild } from "ob
 import { DatacoreJSRenderer } from "ui/javascript";
 import { DatacoreLocalApi } from "./local-api";
 import Parsimmon from "parsimmon";
+import { Coerce } from "./coerce";
+import { DataArray } from "./data-array";
 
 /** Exterally visible API for datacore. */
 export class DatacoreApi {
@@ -51,6 +53,9 @@ export class DatacoreApi {
     // General utilities //
     ///////////////////////
 
+    /** Utilities for coercing types into one specific type for easier programming. */
+    public coerce = Coerce;
+
     /** Resolve a local or absolute path or link to an absolute path. */
     public resolvePath(path: string | Link, sourcePath?: string): string {
         const rawpath = path instanceof Link ? path.path : path;
@@ -81,6 +86,16 @@ export class DatacoreApi {
         return Link.file(path);
     }
 
+    /** Create a link to a header with the given name. */
+    public headerLink(path: string, header: string): Link {
+        return Link.header(path, header);
+    }
+
+    /** Create a link to a block with the given path and block ID. */
+    public blockLink(path: string, block: string): Link {
+        return Link.block(path, block);
+    }
+
     /** Try to parse the given link, throwing an error if it is invalid. */
     public parseLink(linktext: string): Link {
         return this.tryParseLink(linktext).orElseThrow((e) => "Failed to parse link: " + e);
@@ -92,6 +107,11 @@ export class DatacoreApi {
         if (!parsed.status) return Result.failure(Parsimmon.formatError(linktext, parsed));
 
         return Result.success(parsed.value);
+    }
+
+    /** Create a data array from a regular array. */
+    public array<T>(input: T[] | DataArray<T>): DataArray<T> {
+        return DataArray.wrap(input);
     }
 
     /////////////////////

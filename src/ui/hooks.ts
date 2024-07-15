@@ -165,3 +165,29 @@ export function useStableCallback<T>(callback: T, deps: any[]): T {
         [ref]
     ) as T;
 }
+
+const NO_OP_UPDATE = (x: any) => {};
+
+/** Use state that will default to an external controlled value if set; otherwise, will track an internal value. */
+export function useControlledState<T>(
+    initialState: T,
+    override?: T,
+    update?: (value: T) => void
+): [T, (value: T) => void] {
+    const [state, setState] = useState(override ?? initialState);
+    if (override !== undefined) {
+        if (state != override) setState(override);
+
+        return [override, update ?? NO_OP_UPDATE];
+    }
+
+    const setStateWithUpdate = useCallback(
+        (value: T) => {
+            setState(value);
+            if (update) update(value);
+        },
+        [setState, update]
+    );
+
+    return [state, setStateWithUpdate];
+}

@@ -7,12 +7,10 @@ import { ImportResult } from "index/web-worker/message";
 import { App, Component, EventRef, Events, MetadataCache, TAbstractFile, TFile, Vault } from "obsidian";
 import { Settings } from "settings";
 import { MarkdownListBlock, MarkdownListItem, MarkdownPage } from "./types/markdown";
-import { PDF } from "./types/pdf";
 import { GenericFile } from "./types/files";
 import { DateTime } from "luxon";
 import { EmbedQueue } from "./embed-queue";
 import { JsonMarkdownPage } from "./types/json/markdown";
-import { JsonPDF } from "./types/json/pdf";
 
 /** Central API object; handles initialization, events, debouncing, and access to datacore functionality. */
 export class Datacore extends Component {
@@ -67,11 +65,35 @@ export class Datacore extends Component {
 
     /** Initialize datacore by scanning persisted caches and all available files, and queueing parses as needed. */
     initialize() {
-        // The metadata cache is updated on initial file index and file loads.
+        // Metadata cache handles markdown file updates.
         this.registerEvent(this.metadataCache.on("resolve", (file) => this.reload(file)));
 
         // Renames do not set off the metadata cache; catch these explicitly.
         this.registerEvent(this.vault.on("rename", this.rename, this));
+
+        // Handle generic file creates and updates; resolve generally only applies to markdown files
+        // but we do keep basic metadata about all files.
+        this.registerEvent(
+            this.vault.on("create", (file) => {
+                if (!(file instanceof TFile)) return;
+
+                // Handled by the metadata cache.
+                if (INDEXABLE_EXTENSIONS.has(file.extension.toLowerCase())) return;
+
+                this.reload(file);
+            })
+        );
+
+        this.registerEvent(
+            this.vault.on("modify", (file) => {
+                if (!(file instanceof TFile)) return;
+
+                // Handled by the metadata cache.
+                if (INDEXABLE_EXTENSIONS.has(file.extension.toLowerCase())) return;
+
+                this.reload(file);
+            })
+        );
 
         // File creation does cause a metadata change, but deletes do not. Clear the caches for this.
         this.registerEvent(
@@ -82,6 +104,11 @@ export class Datacore extends Component {
             })
         );
 
+        this.index();
+    }
+
+    /** Starts the background initializer. */
+    index() {
         // Asynchronously initialize actual content in the background using a lifecycle-respecting object.
         const init = (this.initializer = new DatacoreInitializer(this));
         init.finished().then((stats) => {
@@ -97,13 +124,15 @@ export class Datacore extends Component {
 
             this.datastore.touch();
             this.trigger("update", this.revision);
+            this.trigger("initialized");
 
             // Clean up any documents which no longer exist in the vault.
             // TODO: I think this may race with other concurrent operations, so
             // this may need to happen at the start of init and not at the end.
-            const currentFiles = this.vault.getFiles().map(file => file.path);
-            this.persister.synchronize(currentFiles).then(cleared =>
-                console.log(`Datacore: dropped ${cleared.size} out-of-date file metadata blocks.`));
+            const currentFiles = this.vault.getFiles().map((file) => file.path);
+            this.persister
+                .synchronize(currentFiles)
+                .then((cleared) => console.log(`Datacore: dropped ${cleared.size} out-of-date file metadata blocks.`));
         });
 
         this.addChild(init);
@@ -119,6 +148,9 @@ export class Datacore extends Component {
         // (for sections, tasks, etc to refer to their parent file) and it requires some finesse to fix.
         this.datastore.delete(oldPath);
         this.reload(file);
+
+        // TODO: For correctness, probably have to either fix links in all linked files OR
+        // just stop normalizing links in the store.
     }
 
     /**
@@ -132,7 +164,7 @@ export class Datacore extends Component {
     /** Queue a file for reloading; this is done asynchronously in the background and may take a few seconds. */
     public async reload(file: TFile): Promise<Indexable> {
         // Filter files by file extensions.
-        if (!INDEXABLE_EXTENSIONS.contains(file.extension)) {
+        if (!INDEXABLE_EXTENSIONS.has(file.extension)) {
             const result = new GenericFile(
                 file.path,
                 DateTime.fromMillis(file.stat.ctime),
@@ -144,7 +176,6 @@ export class Datacore extends Component {
             return result;
         }
 
-        console.log("reloading " + file.path);
         const result = await this.importer.import<ImportResult>(file);
 
         if (result.type === "error") {
@@ -166,14 +197,6 @@ export class Datacore extends Component {
             // And finally trigger an update.
             this.trigger("update", this.revision);
             return parsed;
-        } else if (result.type == "pdf") {
-            let parsed = PDF.from(result.result);
-
-            this.storePdf(parsed);
-            this.persister.storeFile(parsed.$path, parsed.json());
-
-            this.trigger("update", this.revision);
-            return parsed;
         }
 
         throw new Error("Encountered unrecognized import result type: " + (result as any).type);
@@ -186,8 +209,7 @@ export class Datacore extends Component {
                 store(section.$blocks, (block, store) => {
                     if (block instanceof MarkdownListBlock) {
                         // Recursive store function for storing list heirarchies.
-                        const storeRec: Substorer<MarkdownListItem> = (item, store) =>
-                            store(item.$elements, storeRec);
+                        const storeRec: Substorer<MarkdownListItem> = (item, store) => store(item.$elements, storeRec);
 
                         store(block.$elements, storeRec);
                     }
@@ -196,15 +218,11 @@ export class Datacore extends Component {
         });
     }
 
-    /** Store a PDF document. */
-    public storePdf(data: PDF) {
-        this.datastore.store(data);
-    }
-
     // Event propogation.
 
     /** Called whenever the index updates to a new revision. This is the broadest possible datacore event. */
     public on(evt: "update", callback: (revision: number) => any, context?: any): EventRef;
+    public on(evt: "initialized", callback: () => any, context?: any): EventRef;
 
     on(evt: string, callback: (...data: any) => any, context?: any): EventRef {
         return this.events.on(evt, callback, context);
@@ -222,6 +240,8 @@ export class Datacore extends Component {
 
     /** Trigger an update event. */
     private trigger(evt: "update", revision: number): void;
+    /** Trigger an initialization event. */
+    private trigger(evt: "initialized"): void;
 
     /** Trigger an event. */
     private trigger(evt: string, ...args: any[]): void {
@@ -244,6 +264,8 @@ export class DatacoreInitializer extends Component {
     /** Deferred promise which resolves when importing is done. */
     done: Deferred<InitializationStats>;
 
+    /** The total number of target files to import. */
+    targetTotal: number;
     /** The time that init started in milliseconds. */
     start: number;
     /** Total number of files to import. */
@@ -262,6 +284,7 @@ export class DatacoreInitializer extends Component {
 
         this.active = false;
         this.queue = this.core.vault.getFiles();
+        this.targetTotal = this.queue.length;
         this.files = this.queue.length;
         this.start = Date.now();
         this.current = [];
@@ -315,7 +338,7 @@ export class DatacoreInitializer extends Component {
                 files: this.files,
                 imported: this.imported,
                 skipped: this.skipped,
-                cached: this.cached
+                cached: this.cached,
             });
         }
     }
@@ -336,26 +359,19 @@ export class DatacoreInitializer extends Component {
     /** Initialize a specific file. */
     private async init(file: TFile): Promise<InitializationResult> {
         try {
-            // Handle loading PDFs and markdown files from cache.
+            // Handle loading markdown files from cache.
             const cached = await this.core.persister.loadFile(file.path);
             if (cached && cached.time >= file.stat.mtime && cached.version == this.core.version) {
                 if (file.extension === "md") {
                     const data = MarkdownPage.from(cached.data as JsonMarkdownPage, (link) => link);
                     this.core.storeMarkdown(data);
                     return { status: "cached" };
-                } else if (file.extension === "pdf") {
-                    const data = PDF.from(cached.data as JsonPDF);
-                    this.core.storePdf(data);
-                    return { status: "cached" };
-                } 
-
-                // Does not match an existing import type, just reload normally.
-                await this.core.reload(file);
-                return { status: "imported" };
-            } else {
-                await this.core.reload(file);
-                return { status: "imported" };
+                }
             }
+
+            // Does not match an existing import type, just reload normally.
+            await this.core.reload(file);
+            return { status: "imported" };
         } catch (ex) {
             console.log("Datacore: Failed to import file: ", ex);
             return { status: "skipped" };
