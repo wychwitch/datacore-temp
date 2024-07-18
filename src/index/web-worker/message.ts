@@ -27,8 +27,8 @@ export interface CanvasImport {
     contents: string;
     /** The stats for the file. */
     stat: FileStats;
-		/** the canvas's metadata cache */
-		index: CanvasMetadataIndex["any"]
+    /** the canvas's metadata cache */
+    index: CanvasMetadataIndex["any"];
 }
 
 
@@ -63,8 +63,8 @@ export interface PdfImportResult {
 }
 
 export interface CanvasImportResult {
-	type: "canvas";
-	result: JsonCanvas;
+    type: "canvas";
+    result: JsonCanvas;
 }
 export interface ImportFailure {
     /** Failed to import. */
