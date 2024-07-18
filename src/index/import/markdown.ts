@@ -43,13 +43,25 @@ export function markdownImport(
     metadata: CachedMetadata,
     stats: FileStats
 ): JsonMarkdownPage {
-    const lines = markdown.split(/\r\n|\r|\n/);
+    const { lines, metadata: pageMetadata, frontmatter, sections } = markdownSourceImport(path, markdown, metadata);
+    const page = new PageData(path, stats, lines.length, pageMetadata, sections, frontmatter);
+
+    return page.build();
+}
+
+/** Import markdown file metadata, producing all relevant markdown data. */
+export function markdownSourceImport(path: string, markdown: string, metadata: CachedMetadata): {
+    lines: string[];
+    metadata: Metadata;
+    frontmatter?: Record<string, JsonFrontmatterEntry>;
+    sections: SectionData[];
+} {
     const frontmatter: Record<string, JsonFrontmatterEntry> | undefined = metadata.frontmatter
         ? parseFrontmatterBlock(metadata.frontmatter)
         : undefined;
-
-    const page = new PageData(path, stats, lines.length, frontmatter);
-
+    const lines = markdown.split("\n");
+    const markdownMetadata = new Metadata();
+    const sectionArray: SectionData[] = [];
     //////////////
     // Sections //
     //////////////
@@ -64,7 +76,7 @@ export function markdownImport(
         const end = index == metaheadings.length - 1 ? lines.length : metaheadings[index + 1].position.start.line;
 
         const section = new SectionData(start, end, entry.heading, entry.level, index + 1);
-        sections.set(start, page.section(section));
+        sections.set(start, section);
     }
 
     // Add an implicit section for the "heading" section of the page if there is not an immediate header but there is
@@ -72,7 +84,7 @@ export function markdownImport(
     if (sections.size == 0) {
         if (!emptylines(lines, 0, lines.length)) {
             const section = new SectionData(0, lines.length, getFileTitle(path), 1, 0);
-            sections.set(0, page.section(section));
+            sections.set(0, section);
         }
     } else {
         // Find the start of the first section.
@@ -80,7 +92,8 @@ export function markdownImport(
 
         if (first.start > 0 && !emptylines(lines, 0, first.start)) {
             const section = new SectionData(0, first.start, getFileTitle(path), 1, 0);
-            sections.set(0, page.section(section));
+
+            sections.set(0, section);
         }
     }
 
@@ -129,7 +142,9 @@ export function markdownImport(
     }
 
     // Add blocks to sections.
-    for (const block of blocks.values()) lookup(block.start, sections)?.block(block);
+    for (const block of blocks.values()) {
+        lookup(block.start, sections)?.block(block);
+    }
 
     ///////////
     // Lists //
@@ -177,7 +192,7 @@ export function markdownImport(
     for (const tagdef of metadata.tags ?? []) {
         const tag = tagdef.tag.startsWith("#") ? tagdef.tag : "#" + tagdef.tag;
         const line = tagdef.position.start.line;
-        page.metadata.tag(tag);
+        markdownMetadata.tag(tag);
 
         lookup(line, sections)?.metadata.tag(tag);
         lookup(line, blocks)?.metadata.tag(tag);
@@ -188,7 +203,7 @@ export function markdownImport(
     if (metadata.frontmatter) {
         for (const rawtag of extractTags(metadata.frontmatter)) {
             const tag = rawtag.startsWith("#") ? rawtag : "#" + rawtag;
-            page.metadata.tag(tag);
+            markdownMetadata.tag(tag);
         }
     }
 
@@ -199,7 +214,7 @@ export function markdownImport(
     for (let linkdef of metadata.links ?? []) {
         const link = Link.infer(linkdef.link);
         const line = linkdef.position.start.line;
-        page.metadata.link(link);
+        markdownMetadata.link(link);
 
         lookup(line, sections)?.metadata.link(link);
         lookup(line, blocks)?.metadata.link(link);
@@ -212,7 +227,7 @@ export function markdownImport(
 
     // Frontmatter links are only assigned to the page.
     for (const linkdef of metadata.frontmatterLinks ?? []) {
-        page.metadata.link(Link.infer(linkdef.link, false, linkdef.displayText));
+        markdownMetadata.link(Link.infer(linkdef.link, false, linkdef.displayText));
     }
 
     ///////////////////
@@ -221,14 +236,19 @@ export function markdownImport(
 
     for (const field of iterateInlineFields(lines)) {
         const line = field.position.line;
-        page.metadata.inlineField(field);
+        markdownMetadata.inlineField(field);
 
         lookup(line, sections)?.metadata.inlineField(field);
         lookup(line, blocks)?.metadata.inlineField(field);
         lookup(line, listItems)?.metadata.inlineField(field);
     }
-
-    return page.build();
+    sectionArray.push(...sections.values());
+    return {
+        lines,
+        frontmatter,
+        metadata: markdownMetadata,
+        sections: sectionArray,
+    };
 }
 
 //////////////////
@@ -248,7 +268,7 @@ function emptylines(lines: string[], start: number, end: number): boolean {
  * Yields all inline fields found in the document by traversing line by line through the document. Performs some optimizations
  * to skip extra-large lines, and can be disabled.
  */
-function* iterateInlineFields(content: string[]): Generator<InlineField> {
+export function* iterateInlineFields(content: string[]): Generator<InlineField> {
     for (let lineno = 0; lineno < content.length; lineno++) {
         const line = content[lineno];
 
@@ -410,21 +430,14 @@ export class Metadata {
 
 /** Convienent utility for constructing page objects. */
 export class PageData {
-    public sections: SectionData[] = [];
-    public metadata: Metadata = new Metadata();
-
     public constructor(
         public path: string,
         public stats: FileStats,
         public length: number,
+        public metadata: Metadata,
+        public sections: SectionData[],
         public frontmatter?: Record<string, JsonFrontmatterEntry>
     ) {}
-
-    /** Add a new section to the page. */
-    public section(section: SectionData): SectionData {
-        this.sections.push(section);
-        return section;
-    }
 
     public build(): JsonMarkdownPage {
         return {
