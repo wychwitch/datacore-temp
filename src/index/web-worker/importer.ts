@@ -37,7 +37,12 @@ export class FileImporter extends Component {
     /** Throttle settings. */
     throttle: () => ImportThrottle;
 
-    public constructor(public vault: Vault, public fileManager: FileManager, public metadataCache: MetadataCache, throttle?: () => ImportThrottle) {
+    public constructor(
+        public vault: Vault,
+        public fileManager: FileManager,
+        public metadataCache: MetadataCache,
+        throttle?: () => ImportThrottle
+    ) {
         super();
         this.workers = new Map();
         this.shutdown = false;
@@ -84,7 +89,7 @@ export class FileImporter extends Component {
 
         try {
             switch (file.extension) {
-								case "markdown":
+                case "markdown":
                 case "md": {
                     const contents = await this.vault.cachedRead(file);
                     worker!.worker.postMessage({
