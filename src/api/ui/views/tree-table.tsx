@@ -415,22 +415,33 @@ export function TreeTableRowCell<T>({
     isFirst: boolean;
 }) {
     const value = useMemo(() => column.value(row.value), [row, column.value]);
+		const [editableState, dispatch] = useEditableDispatch<typeof value>({
+        content: value,
+        isEditing: false,
+        updater: (v) => column.onUpdate && column.onUpdate(v, row.value),
+    });
     const renderable = useMemo(() => {
-        if (column.render) return column.render(value, row.value);
+
+        if (column.render) {
+					let r = column.render(editableState.content, row.value);
+					if(r && typeof r == "object" && "props" in r)
+						r.props.dispatch = dispatch
+					return r;
+				}
         else return value;
     }, [row, column.render, value]);
 
     const rendered = useAsElement(renderable);
 
-    const [editableState, dispatch] = useEditableDispatch<typeof value>({
-        content: value,
-        isEditing: false,
-        updater: (v) => column.onUpdate!(v, row.value),
-    });
-    const editor = useMemo(() => {
-        if (column.editable && column.editor) return column.editor(editableState.content, row.value, dispatch);
-        else return null;
+    
+const Editor = useMemo(() => {
+			let e;
+        if (column.editable && column.editor) e = column.editor(editableState.content, row.value);
+        else e = null;
+				if(e) e.props.dispatch = dispatch;
+				return e;
     }, [row, column.editor, column.editable, value]);
+   
     return (
         <td
             style={{ paddingLeft: isFirst ? `${(level - 1) * 1.2}em` : undefined }}
@@ -440,7 +451,7 @@ export function TreeTableRowCell<T>({
             {column.editable ? (
                 <Editable<typeof value>
                     defaultRender={rendered}
-                    editor={editor}
+                    editor={Editor}
                     dispatch={dispatch}
                     state={editableState}
                 />
