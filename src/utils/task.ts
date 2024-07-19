@@ -118,14 +118,24 @@ export async function rewriteTask(vault: Vault, task: MarkdownTaskItem, desiredS
     let newText = filetext.join(hasRN ? "\r\n" : "\n");
     await vault.adapter.write(task.$file, newText);
 }
-export async function compeleteTask(completed: boolean, task: MarkdownTaskItem, core: Datacore) {
-    let newText = setTaskCompletion(
-        task,
-        task.$text,
-        core.settings.taskCompletionUseEmojiShorthand,
-        core.settings.taskCompletionText,
-        core.settings.defaultDateFormat,
-        completed
-    );
-    await rewriteTask(core.vault, task, completed ? "x" : " ", newText);
+export async function completeTask(completed: boolean, task: MarkdownTaskItem, core: Datacore) {
+    const tasksToComplete = [task];
+    if (core.settings.recursiveTaskCompletion) {
+        const forEach = (x: MarkdownTaskItem | MarkdownListItem) => {
+            if (x instanceof MarkdownTaskItem) tasksToComplete.push(x);
+            x.$elements.forEach(forEach);
+        };
+        task.$elements.forEach(forEach);
+    }
+    for (const t of tasksToComplete) {
+        let newText = setTaskCompletion(
+            t,
+            t.$text,
+            core.settings.taskCompletionUseEmojiShorthand,
+            core.settings.taskCompletionText,
+            core.settings.defaultDateFormat,
+            completed
+        );
+        await rewriteTask(core.vault, t, completed ? "x" : " ", newText);
+    }
 }
