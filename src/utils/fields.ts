@@ -24,7 +24,7 @@ export async function rewriteFieldInFile<T>(field: Field, newValue: T, app: App)
             const tFile = app.vault.getFileByPath(field.provenance.file);
             if (!tFile) return;
             const content = await app.vault.read(tFile);
-            const lines = content.split(/\r?\n?/);
+            const lines = content.split(/\r\n|\r|\n/);
             const line = lines[field.provenance.line];
             const newLine = setInlineField(line, field.key, Literals.toString(newValue));
             lines[field.provenance.line] = newLine;

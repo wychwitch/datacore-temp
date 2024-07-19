@@ -3,7 +3,7 @@ import { Field } from "expression/field";
 import { Dispatch, useCallback, useState } from "preact/hooks";
 import { useFinalizer, useSetField } from "utils/fields";
 import { EditableAction, UncontrolledTextEditable } from "./editable";
-import Select from "react-select";
+import Select, { ActionMeta } from "react-select";
 
 export function FieldCheckbox(
     props: { className?: string; field: Field; defaultChecked?: boolean } & React.HTMLProps<HTMLInputElement>
@@ -99,18 +99,20 @@ export function FieldSwitch(
 }
 
 export function FieldSelect({
-    onUpdate,
     field,
     multi = false,
     options,
 }: {
-    onUpdate: (v: string | string[]) => void;
     field: Field;
     multi?: boolean;
     options: { value: string; label: string }[];
 }) {
     const onChange = useCallback((newValue: any) => {
-        onUpdate(newValue as string | string[]);
+        if (Array.isArray(newValue)) {
+            useSetField(field)(newValue.map((x) => x.value));
+        } else {
+            useSetField(field)(newValue.value);
+        }
     }, []);
     return (
         <Select
@@ -118,9 +120,9 @@ export function FieldSelect({
             onChange={onChange}
             unstyled
             isMulti={multi ?? false}
-            options={options ?? []}
+            options={options}
             menuPortalTarget={document.body}
-            value={field.value}
+            defaultValue={options.find(a => a.value == field.value)}
             classNames={{
                 input: (props: any) => "prompt-input",
                 valueContainer: (props: any) => "suggestion-item value-container",
