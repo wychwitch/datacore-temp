@@ -33,11 +33,12 @@ export async function rewriteFieldInFile<T>(field: Field, newValue: T, app: App)
     }
 }
 
-export function useSetField<T extends Literal>(field: Field, onChange?: (newValue: T) => void) {
+export function useSetField<T = Literal>(field: Field, onChange?: (newValue: T) => void) {
     const app = useContext(APP_CONTEXT);
     return useCallback(
         (newValue: T) => {
             rewriteFieldInFile(field, newValue, app).then(() => {
+							field.value = newValue as Literal;
                 if (onChange) onChange(newValue);
             });
         },
@@ -53,6 +54,7 @@ export async function setTaskText(text: string, item: MarkdownTaskItem, vault: V
 }
 export function useFinalizer<T>(newValue: T, dispatch: Dispatch<EditableAction<T>>) {
     return async function () {
+			dispatch({type: "content-changed", newValue})
         dispatch({
             type: "commit",
             newValue: newValue,
@@ -62,4 +64,6 @@ export function useFinalizer<T>(newValue: T, dispatch: Dispatch<EditableAction<T
             newValue: false,
         });
     };
+}
+export function useFieldFinalizer<T>(newValue: T, dispatch: Dispatch<EditableAction<Field>>) {
 }

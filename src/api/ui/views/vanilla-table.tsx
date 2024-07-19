@@ -1,5 +1,5 @@
 import { GroupElement, Grouping, Groupings, Literal, Literals } from "expression/literal";
-import { Dispatch, useCallback, useContext, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { Dispatch, useCallback, useContext, useMemo, useRef } from "preact/hooks";
 import { CURRENT_FILE_CONTEXT, Lit } from "ui/markdown";
 import { useInterning } from "ui/hooks";
 import { Fragment } from "preact/jsx-runtime";
@@ -7,7 +7,6 @@ import { VNode, isValidElement } from "preact";
 import { ControlledPager, useDatacorePaging } from "./paging";
 
 import "./table.css";
-import { combineClasses } from "../basics";
 import { Editable, EditableAction, useEditableDispatch } from "ui/fields/editable";
 
 /** A simple column definition which allows for custom renderers and titles. */
@@ -30,8 +29,8 @@ export interface VanillaColumn<T, V = Literal> {
 		/** whether this column is editable or not */
 		editable?: boolean;
 
-		/** Rendered when editing the column */
-		editor?:(value: V, object: T, dispatch: Dispatch<EditableAction<V>>) => JSX.Element;
+    /** Rendered when editing the column */
+    editor?: (value: V, object: T) => VNode<{dispatch: Dispatch<EditableAction<V>>} & {[k: string]: any}>; 
 
 		/** Called when the column value updates. */
 		onUpdate?:(value: V, object: T) => unknown;
@@ -232,24 +231,49 @@ export function TableRow<T>({ level, row, columns }: { level: number; row: T; co
 /** A single cell inside of a row of the table. */
 export function TableRowCell<T>({ row, column }: { row: T; column: VanillaColumn<T> }) {
     const value = useMemo(() => column.value(row), [row, column.value]);
+		const [editableState, dispatch] = useEditableDispatch<typeof value>({
+        content: value,
+        isEditing: false,
+        updater: (v) => column.onUpdate && column.onUpdate(v, row),
+    });
     const renderable = useMemo(() => {
-        if (column.render) return column.render(value, row);
+
+        if (column.render) {
+					let r = column.render(editableState.content, row);
+					if(r && typeof r == "object" && "props" in r)
+						r.props.dispatch = dispatch
+					return r;
+				}
         else return value;
     }, [row, column.render, value]);
 		
     const rendered = useAsElement(renderable);
-		
-		
-		const [editableState, dispatch] = useEditableDispatch<typeof value>({
-			content: value,
-			isEditing: false,
-			updater: (v) => column.onUpdate!(v, row)
-		})
-		const editor = useMemo(() => {
-			if(column.editable && column.editor) return column.editor(editableState.content, row, dispatch);
-			else return null;
-		}, [row, column.editor, column.editable, value])
-    return <td onDblClick={() => dispatch({type: "editing-toggled", newValue: !editableState.isEditing})} className="datacore-table-cell">{column.editable ? <Editable<typeof value> defaultRender={rendered} editor={editor} dispatch={dispatch} state={editableState}/> : rendered}</td>;
+
+    
+    const Editor = useMemo(() => {
+			let e;
+        if (column.editable && column.editor) e = column.editor(editableState.content, row);
+        else e = null;
+				if(e) e.props.dispatch = dispatch;
+				return e;
+    }, [row, column.editor, column.editable, value, editableState.content]);
+    return (
+        <td
+            onDblClick={() => dispatch({ type: "editing-toggled", newValue: !editableState.isEditing })}
+            className="datacore-table-cell"
+        >
+            {column.editable ? (
+                <Editable<typeof value>
+                    defaultRender={rendered}
+                    editor={Editor}
+                    dispatch={dispatch}
+                    state={editableState}
+                />
+            ) : (
+                rendered
+            )}
+        </td>
+    );
 }
 
 /** Ensure that a given literal or element input is rendered as a JSX.Element. */
