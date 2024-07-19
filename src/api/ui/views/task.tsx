@@ -5,7 +5,7 @@ import { Fragment, Ref } from "preact";
 import { APP_CONTEXT, DATACORE_CONTEXT } from "ui/markdown";
 import { JSXInternal } from "preact/src/jsx";
 import { Dispatch, useContext, useMemo, useRef, useState } from "preact/hooks";
-import { rewriteTask, setTaskCompletion } from "utils/task";
+import { completeTask, rewriteTask, setTaskCompletion } from "utils/task";
 import { Literal, Literals } from "expression/literal";
 import {
     EditableAction,
@@ -79,33 +79,7 @@ export function Task({ item, state: props }: { item: MarkdownTaskItem; state: Ta
                 newStatus = completed ? "x" : " ";
             }
             setStatus(newStatus);
-            async function rewr(task: MarkdownTaskItem) {
-                let newText = setTaskCompletion(
-                    task,
-                    task.$text,
-                    settings.taskCompletionUseEmojiShorthand,
-                    settings.taskCompletionText,
-                    settings.defaultDateFormat,
-                    newStatus?.toLowerCase() === "x"
-                );
-                await rewriteTask(app.vault, task, newStatus, newText);
-                task.$status = newStatus;
-            }
-            if (settings.recursiveTaskCompletion) {
-                let flatted: MarkdownTaskItem[] = [];
-                function flatter(iitem: MarkdownTaskItem | MarkdownListItem) {
-                    if (iitem instanceof MarkdownTaskItem) {
-                        flatted.push(iitem);
-                        iitem.$elements.forEach(flatter);
-                    }
-                }
-                item.$elements.forEach(flatter);
-                flatted = flatted.flat(Infinity);
-                for (let iitem of flatted) {
-                    await rewr(iitem);
-                }
-            }
-            await rewr(item);
+						completeTask(item.$status.toLocaleLowerCase() == "x", item, core)
             const nv = completed ? DateTime.now().toFormat(settings.defaultDateFormat) : null;
             completedRef.current && completedRef.current({ type: "commit", newValue: nv });
         },
