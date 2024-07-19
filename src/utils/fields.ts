@@ -8,7 +8,7 @@ import { APP_CONTEXT } from "ui/markdown";
 import { rewriteTask } from "./task";
 import { EditableAction } from "ui/fields/editable";
 
-export async function rewriteFieldInFile(field: Field, newValue: Literal, app: App) {
+export async function rewriteFieldInFile<T>(field: Field, newValue: T, app: App) {
     switch (field.provenance?.type) {
         case "frontmatter": {
             const tFile = app.vault.getFileByPath(field.provenance.file);
