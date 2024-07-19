@@ -26,10 +26,11 @@ import { Coerce } from "./coerce";
 import { ScriptCache } from "./script-cache";
 import { setTaskText, useSetField } from "utils/fields";
 import {
-    ControlledEditableCheckbox,
     ControlledEditableTextField,
-    EditableFieldCheckbox,
+    FieldCheckbox,
     EditableTextField,
+		FieldSlider,
+		FieldSelect,
 } from "ui/fields/editable-fields";
 import { completeTask } from "utils/task";
 import { TreeTableView } from "./ui/views/tree-table";
@@ -328,10 +329,11 @@ export class DatacoreLocalApi {
     public VanillaSelect = VanillaSelect;
 
     /////////////////////////
-    //    field editors    //
-    /////////////////////////
-    public EditableFieldCheckbox = EditableFieldCheckbox;
-    public EditableFieldTextbox = EditableTextField;
-    public EditableCheckbox = ControlledEditableCheckbox;
-    public TextEditor = ControlledEditableTextField;
+		//    field editors    //
+		/////////////////////////
+		public FieldCheckbox = FieldCheckbox;
+		public FieldSlider = FieldSlider;
+		public FieldSelect = FieldSelect;
+		public TextField = EditableTextField;
+		public VanillaTextBox = ControlledEditableTextField;
 }
