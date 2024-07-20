@@ -30,7 +30,7 @@ export interface VanillaColumn<T, V = Literal> {
 		editable?: boolean;
 
     /** Rendered when editing the column */
-    editor?: (value: V, object: T) => VNode<{dispatch: Dispatch<EditableAction<V>>} & {[k: string]: any}>; 
+    editor?: (value: V, object: T) => JSX.Element; 
 
 		/** Called when the column value updates. */
 		onUpdate?:(value: V, object: T) => unknown;
