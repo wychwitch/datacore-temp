@@ -12,7 +12,7 @@ export function FieldCheckbox(
     	dispatch: Dispatch<EditableAction<Field>>;
     } & React.HTMLProps<HTMLInputElement>
 ) {
-    const { field, defaultChecked, dispatch, ...rest } = props;
+    const { field, defaultChecked = false, dispatch, ...rest } = props;
     return (
         <Checkbox
             {...rest}
@@ -30,7 +30,7 @@ export function EditableTextField(props: {
 		defaultValue: string;
     dispatch: Dispatch<EditableAction<string>>;
 }) {
-    const { field, defaultValue, inline, dispatch } = props;
+    const { field, defaultValue = "", inline, dispatch } = props;
 
     return <ControlledEditableTextField text={(field?.value ?? defaultValue) as string} inline={inline} dispatch={dispatch} />;
 }
