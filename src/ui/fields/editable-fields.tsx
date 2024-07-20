@@ -170,7 +170,7 @@ export function FieldSelect<T extends FieldBearingWithPosition>({
             normalized = newValue.value;
         }
         innerCallback(normalized);
-    }, []);
+    }, [field, innerCallback]);
 
     const arrayVal = useMemo(
         () => (Array.isArray(field?.value) ? field.value : !!field ? [field.value] : [defaultValue]),
