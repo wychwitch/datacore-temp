@@ -1,4 +1,4 @@
-import { Checkbox, Slider, Switch } from "api/ui/basics";
+import { Checkbox, Omittable, Slider, Switch } from "api/ui/basics";
 import { Field } from "expression/field";
 import { Dispatch, useCallback, useMemo, useState } from "preact/hooks";
 import { useFinalizer, useSetField } from "utils/fields";
@@ -12,12 +12,12 @@ export function FieldCheckbox(
     	dispatch: Dispatch<EditableAction<Field>>;
     } & React.HTMLProps<HTMLInputElement>
 ) {
-    const { field, defaultChecked, dispatch, ...rest } = props;
+    const { field, defaultChecked = false, dispatch, ...rest } = props;
     return (
         <Checkbox
             {...rest}
             disabled={undefined}
-            defaultChecked={defaultChecked}
+            defaultChecked={(field?.value ?? defaultChecked) as boolean}
             onCheckChange={useSetField(field, (b) => dispatch({type: "content-changed", newValue: {...field, value: b}}))}
             checked={undefined}
         />
@@ -27,11 +27,12 @@ export function FieldCheckbox(
 export function EditableTextField(props: {
     field: Field;
     inline: boolean;
+		defaultValue: string;
     dispatch: Dispatch<EditableAction<string>>;
 }) {
-    const { field, inline, dispatch } = props;
+    const { field, defaultValue = "", inline, dispatch } = props;
 
-    return <ControlledEditableTextField text={field.value as string} inline={inline} dispatch={dispatch} />;
+    return <ControlledEditableTextField text={(field?.value ?? defaultValue) as string} inline={inline} dispatch={dispatch} />;
 }
 
 export function ControlledEditableTextField(props: {
@@ -66,16 +67,17 @@ export function FieldSlider(
         max: number;
         step: number;
         field: Field;
+				defaultValue: number;
     	dispatch: Dispatch<EditableAction<Field>>;
-    } & React.HTMLProps<HTMLInputElement>
+    } & Omit<React.HTMLProps<HTMLInputElement>, Omittable>
 ) {
-    const { field, dispatch, min, max, step, ...rest } = props;
-    const defaultValue = field.value as number;
+    const { field, dispatch, defaultValue = 0, min, max, step, ...rest } = props;
+    const value = (field?.value ?? defaultValue) as number;
     return (
         <Slider
             {...rest}
             disabled={false}
-            defaultValue={defaultValue}
+            defaultValue={value}
             min={min}
             max={max}
             step={step}
@@ -90,15 +92,16 @@ export function FieldSwitch(
         className?: string;
         disabled?: boolean;
         field: Field;
+				defaultValue: boolean;
     	dispatch: Dispatch<EditableAction<Field>>;
-    } & React.HTMLProps<HTMLInputElement>
+    } & Omit<React.HTMLProps<HTMLInputElement>, Omittable>
 ) {
-    const { field, dispatch, ...rest } = props;
+    const { field, dispatch, defaultValue = false, ...rest } = props;
     return (
         <Switch
             {...rest}
             onToggleChange={useSetField(field, (b) => dispatch({type: "content-changed", newValue: {...field, value: b}}))}
-            defaultChecked={field.value as boolean}
+            defaultChecked={(field.value ?? defaultValue) as boolean}
             checked={undefined}
         />
     );
@@ -108,10 +111,12 @@ export function FieldSelect({
     field,
     multi = false,
     options,
+		defaultValue,
 		dispatch
 }: {
     field: Field;
     multi?: boolean;
+		defaultValue: string | string[];
     options: { value: string; label: string }[];
     dispatch: Dispatch<EditableAction<Field>>;
 }) {
@@ -126,7 +131,7 @@ export function FieldSelect({
 				innerCallback(normalized)
     }, []);
 
-		const arrayVal = useMemo(() => Array.isArray(field.value) ? field.value : [field.value], [field])
+		const arrayVal = useMemo(() => Array.isArray(field.value) ? field.value : !!field ? [field.value] : [defaultValue], [field])
     const defVal = useMemo(
         () =>
             multi

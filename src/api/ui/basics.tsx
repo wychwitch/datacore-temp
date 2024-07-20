@@ -9,7 +9,7 @@ import "./basics.css";
 
 /** Various intents for buttons and other interactive elements. */
 export type Intent = "error" | "warn" | "info" | "success";
-type Omittable = "value" | "defaultValue"
+export type Omittable = "value" | "defaultValue"
 export const INTENT_CLASSES: Record<Intent, string> = {
     error: "dc-intent-error",
     warn: "dc-intent-warn",
