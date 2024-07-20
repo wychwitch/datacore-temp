@@ -31,6 +31,7 @@ import {
     EditableTextField,
 		FieldSlider,
 		FieldSelect,
+		FieldSwitch,
 } from "ui/fields/editable-fields";
 import { completeTask } from "utils/task";
 import { TreeTableView } from "./ui/views/tree-table";
@@ -334,6 +335,7 @@ export class DatacoreLocalApi {
 		public FieldCheckbox = FieldCheckbox;
 		public FieldSlider = FieldSlider;
 		public FieldSelect = FieldSelect;
+		public FieldSwitch = FieldSwitch;
 		public TextField = EditableTextField;
 		public VanillaTextBox = ControlledEditableTextField;
 }

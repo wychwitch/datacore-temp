@@ -1,20 +1,24 @@
 import { Checkbox, Slider, Switch } from "api/ui/basics";
 import { Field } from "expression/field";
-import { Dispatch, useCallback, useState } from "preact/hooks";
+import { Dispatch, useCallback, useMemo, useState } from "preact/hooks";
 import { useFinalizer, useSetField } from "utils/fields";
 import { EditableAction, UncontrolledTextEditable } from "./editable";
 import Select from "react-select";
-
 export function FieldCheckbox(
-    props: { className?: string; field: Field; defaultChecked?: boolean } & React.HTMLProps<HTMLInputElement>
+    props: {
+        className?: string;
+        field: Field;
+        defaultChecked?: boolean;
+    	dispatch: Dispatch<EditableAction<Field>>;
+    } & React.HTMLProps<HTMLInputElement>
 ) {
-    const { field, defaultChecked, ...rest } = props;
+    const { field, defaultChecked, dispatch, ...rest } = props;
     return (
         <Checkbox
             {...rest}
             disabled={undefined}
             defaultChecked={defaultChecked}
-            onCheckChange={useSetField(field)}
+            onCheckChange={useSetField(field, (b) => dispatch({type: "content-changed", newValue: {...field, value: b}}))}
             checked={undefined}
         />
     );
@@ -62,9 +66,10 @@ export function FieldSlider(
         max: number;
         step: number;
         field: Field;
+    	dispatch: Dispatch<EditableAction<Field>>;
     } & React.HTMLProps<HTMLInputElement>
 ) {
-    const { field, min, max, step, ...rest } = props;
+    const { field, dispatch, min, max, step, ...rest } = props;
     const defaultValue = field.value as number;
     return (
         <Slider
@@ -74,8 +79,8 @@ export function FieldSlider(
             min={min}
             max={max}
             step={step}
-            value={undefined}
-            onValueChange={useSetField(field)}
+						value={undefined}
+            onValueChange={useSetField(field, (b) => dispatch({type: "content-changed", newValue: {...field, value: b}}))}
         />
     );
 }
@@ -85,13 +90,14 @@ export function FieldSwitch(
         className?: string;
         disabled?: boolean;
         field: Field;
+    	dispatch: Dispatch<EditableAction<Field>>;
     } & React.HTMLProps<HTMLInputElement>
 ) {
-    const { field, ...rest } = props;
+    const { field, dispatch, ...rest } = props;
     return (
         <Switch
             {...rest}
-            onToggleChange={useSetField(field)}
+            onToggleChange={useSetField(field, (b) => dispatch({type: "content-changed", newValue: {...field, value: b}}))}
             defaultChecked={field.value as boolean}
             checked={undefined}
         />
@@ -99,33 +105,47 @@ export function FieldSwitch(
 }
 
 export function FieldSelect({
-    onUpdate,
     field,
     multi = false,
     options,
+		dispatch
 }: {
-    onUpdate: (v: string | string[]) => void;
     field: Field;
     multi?: boolean;
     options: { value: string; label: string }[];
+    dispatch: Dispatch<EditableAction<Field>>;
 }) {
     const onChange = useCallback((newValue: any) => {
-        onUpdate(newValue as string | string[]);
+			let normalized;
+        if (Array.isArray(newValue)) {
+					normalized = newValue.map(x => x.value)
+        } else {
+					normalized = newValue.value;
+        }
+        useSetField(field, (b) => dispatch({type: "content-changed", newValue: {...field, value: b}}))(normalized)
     }, []);
+		const arrayVal = useMemo(() => Array.isArray(field.value) ? field.value : [field.value], [field])
+    const defVal = useMemo(
+        () =>
+            multi
+                ? options.filter((a) => (arrayVal).findIndex((b) => b == a.value) != -1)
+                : options.find((a) => a.value == field.value),
+        [options, multi]
+    );
     return (
         <Select
             classNamePrefix="datacore-selectable"
             onChange={onChange}
             unstyled
             isMulti={multi ?? false}
-            options={options ?? []}
+            options={options}
             menuPortalTarget={document.body}
-            value={field.value}
+            defaultValue={defVal}
             classNames={{
-                input: (props: any) => "prompt-input",
-                valueContainer: (props: any) => "suggestion-item value-container",
-                container: (props: any) => "suggestion-container",
-                menu: (props: any) => "suggestion-content suggestion-container",
+                input: () => "prompt-input",
+                valueContainer: () => "suggestion-item value-container",
+                container: () => "suggestion-container",
+                menu: () => "suggestion-content suggestion-container",
                 option: (props: any) => `suggestion-item${props.isSelected ? " is-selected" : ""}`,
             }}
         />
