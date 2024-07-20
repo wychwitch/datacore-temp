@@ -115,6 +115,7 @@ export function FieldSelect({
     options: { value: string; label: string }[];
     dispatch: Dispatch<EditableAction<Field>>;
 }) {
+    const innerCallback = useSetField(field, (b) => dispatch({type: "content-changed", newValue: {...field, value: b}}))
     const onChange = useCallback((newValue: any) => {
 			let normalized;
         if (Array.isArray(newValue)) {
@@ -122,8 +123,9 @@ export function FieldSelect({
         } else {
 					normalized = newValue.value;
         }
-        useSetField(field, (b) => dispatch({type: "content-changed", newValue: {...field, value: b}}))(normalized)
+				innerCallback(normalized)
     }, []);
+
 		const arrayVal = useMemo(() => Array.isArray(field.value) ? field.value : [field.value], [field])
     const defVal = useMemo(
         () =>
@@ -135,7 +137,7 @@ export function FieldSelect({
     return (
         <Select
             classNamePrefix="datacore-selectable"
-            onChange={onChange}
+            onChange={(n) => onChange(n)}
             unstyled
             isMulti={multi ?? false}
             options={options}
