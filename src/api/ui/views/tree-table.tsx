@@ -425,7 +425,7 @@ export function TreeTableRowCell<T>({
         if (column.render) {
 					let r = column.render(editableState.content, row.value);
 					if(r && typeof r == "object" && "props" in r)
-						return {...r, dispatch}
+						return {...r, props: {...r.props, dispatch}}
 					return r;
 				}
         else return value;
@@ -438,7 +438,7 @@ const Editor = useMemo(() => {
 			let e;
         if (column.editable && column.editor) e = column.editor(editableState.content, row.value);
         else e = null;
-				if(e) return {...e, dispatch};
+				if(e) return {...e, props: {...e.props, dispatch}};
 				return e;
     }, [row, column.editor, column.editable, value]);
    
