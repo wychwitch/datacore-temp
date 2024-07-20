@@ -258,7 +258,7 @@ export function TableRowCell<T>({ row, column }: { row: T; column: VanillaColumn
         else e = null;
 				if(e) return {...e, props: {...e.props, dispatch}};
 				return e;
-    }, [row, column.editor, column.editable, value, editableState.content]);
+    }, [row, column.editor, column.editable, value]);
     return (
         <td
             onDblClick={() => dispatch({ type: "editing-toggled", newValue: !editableState.isEditing })}

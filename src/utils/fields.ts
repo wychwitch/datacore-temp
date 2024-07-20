@@ -38,7 +38,6 @@ export function useSetField<T = Literal>(field: Field, onChange?: (newValue: T) 
     return useCallback(
         (newValue: T) => {
             rewriteFieldInFile(field, newValue, app).then(() => {
-                if (field) field.value = newValue as Literal;
                 if (onChange) onChange(newValue);
             });
         },
