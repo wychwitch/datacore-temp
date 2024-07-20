@@ -101,7 +101,7 @@ export function FieldSwitch(
         <Switch
             {...rest}
             onToggleChange={useSetField(field, (b) => dispatch({type: "content-changed", newValue: {...field, value: b}}))}
-            defaultChecked={(field.value ?? defaultValue) as boolean}
+            defaultChecked={(field?.value ?? defaultValue) as boolean}
             checked={undefined}
         />
     );
