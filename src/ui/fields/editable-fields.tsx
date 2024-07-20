@@ -131,12 +131,12 @@ export function FieldSelect({
 				innerCallback(normalized)
     }, []);
 
-		const arrayVal = useMemo(() => Array.isArray(field.value) ? field.value : !!field ? [field.value] : [defaultValue], [field])
+		const arrayVal = useMemo(() => Array.isArray(field?.value) ? field.value : !!field ? [field.value] : [defaultValue], [field])
     const defVal = useMemo(
         () =>
             multi
                 ? options.filter((a) => (arrayVal).findIndex((b) => b == a.value) != -1)
-                : options.find((a) => a.value == field.value),
+                : options.find((a) => a.value == field?.value),
         [options, multi]
     );
     return (
