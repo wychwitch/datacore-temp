@@ -243,7 +243,7 @@ export function TableRowCell<T>({ row, column }: { row: T; column: VanillaColumn
         if (column.render) {
 					let r = column.render(editableState.content, row);
 					if(r && typeof r == "object" && "props" in r)
-						return {...r, dispatch}
+						return {...r, props: {...r.props, dispatch}}
 					return r;
 				}
         else return value;
@@ -256,7 +256,7 @@ export function TableRowCell<T>({ row, column }: { row: T; column: VanillaColumn
 			let e;
         if (column.editable && column.editor) e = column.editor(editableState.content, row);
         else e = null;
-				if(e) return {...e, dispatch};
+				if(e) return {...e, props: {...e.props, dispatch}};
 				return e;
     }, [row, column.editor, column.editable, value, editableState.content]);
     return (
