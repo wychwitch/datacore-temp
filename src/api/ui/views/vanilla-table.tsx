@@ -9,6 +9,8 @@ import { ControlledPager, useDatacorePaging } from "./paging";
 import "./table.css";
 import { Editable, EditableAction, useEditableDispatch } from "ui/fields/editable";
 
+
+
 /** A simple column definition which allows for custom renderers and titles. */
 export interface VanillaColumn<T, V = Literal> {
     /** The unique ID of this table column; you cannot have multiple columns with the same ID in a given table. */
@@ -241,7 +243,7 @@ export function TableRowCell<T>({ row, column }: { row: T; column: VanillaColumn
         if (column.render) {
 					let r = column.render(editableState.content, row);
 					if(r && typeof r == "object" && "props" in r)
-						r.props.dispatch = dispatch
+						return {...r, dispatch}
 					return r;
 				}
         else return value;
@@ -254,7 +256,7 @@ export function TableRowCell<T>({ row, column }: { row: T; column: VanillaColumn
 			let e;
         if (column.editable && column.editor) e = column.editor(editableState.content, row);
         else e = null;
-				if(e) e.props.dispatch = dispatch;
+				if(e) return {...e, dispatch};
 				return e;
     }, [row, column.editor, column.editable, value, editableState.content]);
     return (
