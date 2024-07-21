@@ -1,12 +1,9 @@
 import { Checkbox, Omittable, Slider, Switch } from "api/ui/basics";
-import { Field, Fieldbearing } from "expression/field";
+import { Field } from "expression/field";
 import { Dispatch, useCallback, useMemo, useState } from "preact/hooks";
 import { useFinalizer, useSetField } from "utils/fields";
 import { EditableAction, UncontrolledTextEditable } from "./editable";
 import Select from "react-select";
-import { Indexable } from "index/types/indexable";
-import { LineSpan } from "index/types/json/markdown";
-type FieldBearingWithPosition = Indexable & Fieldbearing & { $position: LineSpan };
 export function FieldCheckbox(
     props: {
         className?: string;
