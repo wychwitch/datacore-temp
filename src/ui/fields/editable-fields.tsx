@@ -24,14 +24,12 @@ function fieldWithDefault<T extends FieldBearingWithPosition>(object: T, key: st
 export function FieldCheckbox<T extends FieldBearingWithPosition>(
     props: {
         className?: string;
-        key: string;
-        object: T;
+				field: Field;
         defaultChecked?: boolean;
         dispatch: Dispatch<EditableAction<Field>>;
     } & React.HTMLProps<HTMLInputElement>
 ) {
-    const { key, object, defaultChecked = false, dispatch, ...rest } = props;
-    const field = fieldWithDefault(object, key, defaultChecked);
+    const { field, defaultChecked = false, dispatch, ...rest } = props;
     return (
         <Checkbox
             {...rest}
@@ -46,14 +44,13 @@ export function FieldCheckbox<T extends FieldBearingWithPosition>(
 }
 
 export function EditableTextField<T extends FieldBearingWithPosition>(props: {
-    key: string;
     object: T;
+		field: Field;
     inline: boolean;
     defaultValue: string;
     dispatch: Dispatch<EditableAction<string>>;
 }) {
-    const { key, object, defaultValue = "", inline, dispatch } = props;
-    const field = fieldWithDefault(object, key, defaultValue);
+    const { field, defaultValue = "", inline, dispatch } = props;
     return (
         <ControlledEditableTextField
             text={(field?.value ?? defaultValue) as string}
@@ -88,20 +85,18 @@ export function ControlledEditableTextField(props: {
     return <UncontrolledTextEditable text={text} inline={inline} dispatch={dispatch} onInput={onInput} />;
 }
 
-export function FieldSlider<T extends FieldBearingWithPosition>(
+export function FieldSlider(
     props: {
         className: string;
         min: number;
         max: number;
         step: number;
         defaultValue: number;
-        key: string;
-        object: T;
+				field: Field;
         dispatch: Dispatch<EditableAction<Field>>;
     } & Omit<React.HTMLProps<HTMLInputElement>, Omittable>
 ) {
-    const { key, object, dispatch, defaultValue = 0, min, max, step, ...rest } = props;
-    const field = fieldWithDefault(object, key, defaultValue);
+    const { field, dispatch, defaultValue = 0, min, max, step, ...rest } = props;
     const value = (field?.value ?? defaultValue) as number;
     return (
         <Slider
@@ -119,18 +114,16 @@ export function FieldSlider<T extends FieldBearingWithPosition>(
     );
 }
 
-export function FieldSwitch<T extends FieldBearingWithPosition>(
+export function FieldSwitch(
     props: {
         className?: string;
         disabled?: boolean;
         defaultValue: boolean;
-        key: string;
-        object: T;
+				field: Field;
         dispatch: Dispatch<EditableAction<Field>>;
     } & Omit<React.HTMLProps<HTMLInputElement>, Omittable>
 ) {
-    const { key, object, dispatch, defaultValue = false, ...rest } = props;
-    const field = fieldWithDefault(object, key, defaultValue);
+    const { field, dispatch, defaultValue = false, ...rest } = props;
     return (
         <Switch
             {...rest}
@@ -143,22 +136,19 @@ export function FieldSwitch<T extends FieldBearingWithPosition>(
     );
 }
 
-export function FieldSelect<T extends FieldBearingWithPosition>({
+export function FieldSelect({
     multi = false,
     options,
     defaultValue,
-    key,
-    object,
+    field,
     dispatch,
 }: {
     multi?: boolean;
     defaultValue: string | string[];
-    key: string;
-    object: T;
+				field: Field;
     options: { value: string; label: string }[];
     dispatch: Dispatch<EditableAction<Field>>;
 }) {
-    const field = fieldWithDefault(object, key, defaultValue);
     const innerCallback = useSetField(field, (b) =>
         dispatch({ type: "content-changed", newValue: { ...field, value: b } })
     );
