@@ -6,22 +6,8 @@ import { EditableAction, UncontrolledTextEditable } from "./editable";
 import Select from "react-select";
 import { Indexable } from "index/types/indexable";
 import { LineSpan } from "index/types/json/markdown";
-import { Literal } from "expression/literal";
 type FieldBearingWithPosition = Indexable & Fieldbearing & { $position: LineSpan };
-function fieldWithDefault<T extends FieldBearingWithPosition>(object: T, key: string, defaultVal: Literal): Field {
-    if (object.field(key) != undefined) return object.field(key)!;
-    return {
-        key,
-        value: defaultVal,
-        provenance: {
-            type: "inline-field",
-            file: object.$file!,
-            key,
-            line: object.$position.end,
-        },
-    };
-}
-export function FieldCheckbox<T extends FieldBearingWithPosition>(
+export function FieldCheckbox(
     props: {
         className?: string;
 				field: Field;
@@ -43,8 +29,7 @@ export function FieldCheckbox<T extends FieldBearingWithPosition>(
     );
 }
 
-export function EditableTextField<T extends FieldBearingWithPosition>(props: {
-    object: T;
+export function EditableTextField(props: {
 		field: Field;
     inline: boolean;
     defaultValue: string;
