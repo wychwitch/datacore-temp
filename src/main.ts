@@ -4,6 +4,7 @@ import { DateTime } from "luxon";
 import { App, Plugin, PluginSettingTab, Setting } from "obsidian";
 import { createElement, render } from "preact";
 import { DEFAULT_SETTINGS, Settings } from "settings";
+import { DatacoreQueryView, VIEW_TYPE_DATACORE } from "ui/DatacoreQueryView";
 import { IndexStatusBar } from "ui/index-status";
 
 /** Reactive data engine for your Obsidian.md vault. */
@@ -51,6 +52,7 @@ export default class DatacorePlugin extends Plugin {
             async (source: string, el, ctx) => this.api.executeTsx(source, el, ctx, ctx.sourcePath),
             -100
         );
+				this.registerView(VIEW_TYPE_DATACORE, (leaf) => new DatacoreQueryView(leaf, this.api, this));
 
         // Register JS highlighting for codeblocks.
         this.register(this.registerCodeblockHighlighting());
@@ -64,6 +66,7 @@ export default class DatacorePlugin extends Plugin {
 
         // Make the API globally accessible from any context.
         window.datacore = this.api;
+
 
         // bon appetit
         console.log(`Datacore: version ${this.manifest.version} (requires obsidian ${this.manifest.minAppVersion})`);
