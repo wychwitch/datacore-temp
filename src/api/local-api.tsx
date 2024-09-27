@@ -150,8 +150,8 @@ export class DatacoreLocalApi {
         return DataArray.wrap(input);
     }
 
-		public async setTaskText(newText: string, task: MarkdownTaskItem): Promise<void>  {
-			await setTaskText(newText, task, this.core.vault);
+		public setTaskText(newText: string, task: MarkdownTaskItem): void  {
+			setTaskText(this.app, newText, task);
 		}
 		public setTaskCompletion(completed: boolean, task: MarkdownTaskItem): void {
 			completeTask(completed, task, this.core)
