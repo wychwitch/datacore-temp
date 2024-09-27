@@ -79,7 +79,7 @@ export function Task({ item, state: props }: { item: MarkdownTaskItem; state: Ta
                 newStatus = completed ? "x" : " ";
             }
             setStatus(newStatus);
-						completeTask(item.$status.toLocaleLowerCase() == "x", item, core)
+						await completeTask(item.$status.toLocaleLowerCase() == "x", item, core)
             const nv = completed ? DateTime.now().toFormat(settings.defaultDateFormat) : null;
             completedRef.current && completedRef.current({ type: "commit", newValue: nv });
         },
