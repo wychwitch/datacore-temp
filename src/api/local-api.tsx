@@ -17,16 +17,16 @@ import { CURRENT_FILE_CONTEXT, Lit, Markdown, ObsidianLink } from "ui/markdown";
 import { CSSProperties } from "preact/compat";
 import { Literal } from "expression/literal";
 import { Button, Checkbox, Icon, Slider, Switch, Textbox, VanillaSelect } from "./ui/basics";
-import { VanillaTable } from "./ui/views/vanilla-table";
 import { TaskList } from "./ui/views/task";
+import { VanillaTable } from "./ui/views/table";
 import { Callout } from "./ui/views/callout";
-import { Card } from "./ui/views/card";
+import { Card } from "./ui/views/cards";
 import { DataArray } from "./data-array";
 import { Coerce } from "./coerce";
 import { ScriptCache } from "./script-cache";
 import { setTaskText, useSetField } from "utils/fields";
 import { ControlledTextEditable, EditableFieldCheckbox, EditableTextField } from "ui/fields/editable-fields";
-import { compeleteTask, rewriteTask } from "utils/task";
+import { completeTask, rewriteTask } from "utils/task";
 
 /** Local API provided to specific codeblocks when they are executing. */
 export class DatacoreLocalApi {
@@ -147,7 +147,7 @@ export class DatacoreLocalApi {
 			setTaskText(newText, task);
 		}
 		public setTaskCompletion(completed: boolean, task: MarkdownTaskItem): void {
-			compeleteTask(completed, task, this.core)
+			completeTask(completed, task, this.core)
 		}
 
     /////////////
