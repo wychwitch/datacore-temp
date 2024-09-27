@@ -18,8 +18,6 @@ export async function rewriteFieldInFile(field: Field, newValue: Literal, app: A
             });
             break;
         }
-        case "intrinsic":
-            break;
         case "inline-field": {
             const tFile = app.vault.getFileByPath(field.provenance.file);
             if (!tFile) return;
@@ -44,7 +42,7 @@ export function useSetField<T extends Literal>(field: Field, onChange?: (newValu
         [field, onChange]
     );
 }
-export async function setTaskText(text: string, item: MarkdownTaskItem) {
+export async function setTaskText(app: App, text: string, item: MarkdownTaskItem) {
     let withFields = `${text}${Object.keys(item.$infields).length ? " " : ""}`;
     for (let field in item.$infields) {
         withFields = setInlineField(withFields, field, item.$infields[field].raw);
