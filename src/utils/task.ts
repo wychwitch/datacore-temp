@@ -92,7 +92,8 @@ export async function rewriteTask(vault: Vault, task: MarkdownTaskItem, desiredS
 
     let rawFiletext = await vault.adapter.read(task.$file);
     let hasRN = rawFiletext.contains("\r");
-    let filetext = rawFiletext.split(/\r?\n/u);
+    let filetext = rawFiletext.split(/\r\n|\r|\n/u);
+
 
     if (filetext.length < task.$line) return;
     let match = LIST_ITEM_REGEX.exec(filetext[task.$line]);
