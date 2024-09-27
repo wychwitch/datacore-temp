@@ -8,6 +8,8 @@ import { ControlledPager, useDatacorePaging } from "./paging";
 
 import "./table.css";
 import { Editable, EditableAction, useEditableDispatch } from "ui/fields/editable";
+import { faSortDown, faSortUp, faSort } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 
 
@@ -290,3 +292,43 @@ function useAsElement(element: VNode | Literal): VNode {
         }
     }, [element]);
 }
+/** Provides a sort button that has a click handler. */
+export function SortButton({
+    direction,
+    onClick,
+    className,
+}: {
+    direction?: SortDirection;
+    onClick?: (evt: MouseEvent) => any;
+    className?: string;
+}) {
+    const icon = useMemo(() => {
+        if (direction == "ascending") return faSortDown;
+        else if (direction == "descending") return faSortUp;
+        return faSort;
+    }, [direction]);
+
+    return (
+        <div onClick={onClick} className={className}>
+            <FontAwesomeIcon icon={icon} />
+        </div>
+    );
+}
+
+/** Default comparator for sorting on a table column. */
+export const DEFAULT_TABLE_COMPARATOR: <T>(a: Literal, b: Literal, ao: T, bo: T) => number = (a, b, _ao, _bo) =>
+    Literals.compare(a, b);
+
+/////////////////
+// Table Hooks //
+/////////////////
+
+export type TableAction =
+    | { type: "reset-all" }
+    | { type: "set-page"; page: number }
+    | { type: "sort-column"; column: string; direction?: "ascending" | "descending" };
+
+		export type SortDirection = "ascending" | "descending";
+
+/** The ways that the table can be sorted. */
+export type SortOn = { type: "column"; id: string; direction: SortDirection };
