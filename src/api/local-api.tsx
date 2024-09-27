@@ -34,6 +34,7 @@ import {
 		FieldSwitch,
 } from "ui/fields/editable-fields";
 import { completeTask } from "utils/task";
+import { TreeTableView } from "./ui/views/tree-table";
 
 /** Local API provided to specific codeblocks when they are executing. */
 export class DatacoreLocalApi {
@@ -313,6 +314,7 @@ export class DatacoreLocalApi {
 
     public TaskList = TaskList;
     public VanillaTable = VanillaTable;
+		public TreeTable = TreeTableView;
     public Card = Card;
 
     /////////////////////////
