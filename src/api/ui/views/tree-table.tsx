@@ -1,5 +1,5 @@
 import { GroupElement, Grouping, Groupings, Literal, Literals } from "expression/literal";
-import { GroupingConfig, useAsElement, VanillaColumn, VanillaTableProps } from "./vanilla-table";
+import { GroupingConfig, useAsElement, VanillaColumn, VanillaTableProps } from "./table";
 import { useInterning, useStableCallback } from "ui/hooks";
 import { Dispatch, Reducer, useCallback, useContext, useEffect, useMemo, useReducer, useRef } from "preact/hooks";
 import { ControlledPager, useDatacorePaging } from "./paging";
