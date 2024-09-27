@@ -2,13 +2,13 @@ import { Field } from "expression/field";
 import { Literal, Literals } from "expression/literal";
 import { setInlineField } from "index/import/inline-field";
 import { MarkdownTaskItem } from "index/types/markdown";
-import { App, Vault } from "obsidian";
+import { App } from "obsidian";
 import { Dispatch, useCallback, useContext } from "preact/hooks";
 import { APP_CONTEXT } from "ui/markdown";
 import { rewriteTask } from "./task";
 import { EditableAction } from "ui/fields/editable";
 
-export async function rewriteFieldInFile<T>(field: Field, newValue: T, app: App) {
+export async function rewriteFieldInFile(field: Field, newValue: Literal, app: App) {
     switch (field.provenance?.type) {
         case "frontmatter": {
             const tFile = app.vault.getFileByPath(field.provenance.file);
@@ -18,13 +18,11 @@ export async function rewriteFieldInFile<T>(field: Field, newValue: T, app: App)
             });
             break;
         }
-        case "intrinsic":
-            break;
         case "inline-field": {
             const tFile = app.vault.getFileByPath(field.provenance.file);
             if (!tFile) return;
             const content = await app.vault.read(tFile);
-            const lines = content.split(/\r\n|\r|\n/);
+            const lines = content.split(/\r?\n?/);
             const line = lines[field.provenance.line];
             const newLine = setInlineField(line, field.key, Literals.toString(newValue));
             lines[field.provenance.line] = newLine;
@@ -33,7 +31,7 @@ export async function rewriteFieldInFile<T>(field: Field, newValue: T, app: App)
     }
 }
 
-export function useSetField<T = Literal>(field: Field, onChange?: (newValue: T) => void) {
+export function useSetField<T extends Literal>(field: Field, onChange?: (newValue: T) => void) {
     const app = useContext(APP_CONTEXT);
     return useCallback(
         (newValue: T) => {
@@ -44,16 +42,15 @@ export function useSetField<T = Literal>(field: Field, onChange?: (newValue: T) 
         [field, onChange]
     );
 }
-export async function setTaskText(text: string, item: MarkdownTaskItem, vault: Vault) {
+export async function setTaskText(app: App, text: string, item: MarkdownTaskItem) {
     let withFields = `${text}${Object.keys(item.$infields).length ? " " : ""}`;
     for (let field in item.$infields) {
         withFields = setInlineField(withFields, field, item.$infields[field].raw);
     }
-    await rewriteTask(vault, item, item.$status, withFields);
+    await rewriteTask(app.vault, item, item.$status, withFields);
 }
 export function useFinalizer<T>(newValue: T, dispatch: Dispatch<EditableAction<T>>) {
     return async function () {
-        dispatch({ type: "content-changed", newValue });
         dispatch({
             type: "commit",
             newValue: newValue,
@@ -64,4 +61,3 @@ export function useFinalizer<T>(newValue: T, dispatch: Dispatch<EditableAction<T
         });
     };
 }
-export function useFieldFinalizer<T>(newValue: T, dispatch: Dispatch<EditableAction<Field>>) {}
