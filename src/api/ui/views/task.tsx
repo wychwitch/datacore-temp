@@ -71,7 +71,6 @@ export function Task({ item, state: props }: { item: MarkdownTaskItem; state: Ta
     const onChecked = useStableCallback(
         async (evt: JSXInternal.TargetedMouseEvent<HTMLInputElement>) => {
             const completed = evt.currentTarget.checked;
-
             let newStatus: string;
             if (evt.shiftKey) {
                 newStatus = nextState();
@@ -79,11 +78,11 @@ export function Task({ item, state: props }: { item: MarkdownTaskItem; state: Ta
                 newStatus = completed ? "x" : " ";
             }
             setStatus(newStatus);
-						await completeTask(item.$status.toLocaleLowerCase() == "x", item, core)
+						await completeTask(completed, item, core)
             const nv = completed ? DateTime.now().toFormat(settings.defaultDateFormat) : null;
             completedRef.current && completedRef.current({ type: "commit", newValue: nv });
         },
-        [item]
+        []
     );
     const onChanger = useStableCallback(
         async (val: Literal) => {
